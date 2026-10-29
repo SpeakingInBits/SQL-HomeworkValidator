@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
@@ -104,6 +105,51 @@ public class WindowTests
         var texts = VisibleTexts(window).ToList();
         Assert.Contains("Your result (3)", texts);
         Assert.Contains("Expected result (1)", texts);
+    }
+
+    [AvaloniaFact]
+    public void Solution_is_offered_only_when_the_assignment_allows_it()
+    {
+        // MyGuitarShop homework 1 allows solutions, with an extra accepted answer for question 3; everything else keeps the defaults.
+        var content = new ContentLibrary
+        {
+            Root = Content.Root,
+            Databases = Content.Databases,
+            Assignments = Content.Assignments.Select(a => a.Id != "mgs-hw1" ? a : a with
+            {
+                Questions = a.Questions.Select(q => q.Number != 3 ? q : q with
+                {
+                    Alternatives = [new NamedScript("between", "SELECT ProductName, ListPrice, DateAdded FROM Products\nWHERE ListPrice BETWEEN 500.01 AND 1999.99\nORDER BY DateAdded DESC;")],
+                }).ToList(),
+                SolutionsFrom = DateOnly.MinValue,
+            }).ToList(),
+        };
+        var viewModel = new MainViewModel(content);
+        var workspace = new WorkspaceViewModel(content, ServerConnection.Create("example-server", "sa", "x"),
+            new ServerInfo("17.0.1000.7", "Developer Edition (64-bit)", true), new AnswerStore(TestAppBuilder.NewTempFolder()), () => { });
+        viewModel.CurrentPage = workspace;
+        var questions = workspace.Assignments.SelectMany(a => a.Questions).ToList();
+        var window = Show(viewModel);
+        ToggleButton ShowSolution() => window.GetVisualDescendants().OfType<ToggleButton>().Single(b => b.Content as string == "Show solution");
+
+        workspace.SelectedNode = questions.Single(q => q.Question.Id == "ap-hw1/q2");
+        window.UpdateLayout();
+        Assert.False(ShowSolution().IsEffectivelyVisible);
+
+        var question = questions.Single(q => q.Question.Id == "mgs-hw1/q3");
+        workspace.SelectedNode = question;
+        window.UpdateLayout();
+        Assert.True(ShowSolution().IsEffectivelyVisible);
+        Assert.DoesNotContain("Solution", VisibleTexts(window));
+
+        ShowSolution().IsChecked = true;
+        window.UpdateLayout();
+        TestAppBuilder.SaveScreenshot(window, "workspace-solution");
+
+        var texts = VisibleTexts(window).ToList();
+        Assert.Contains("Solution", texts);
+        Assert.Contains(question.Question.SolutionSql.Trim(), texts);
+        Assert.Contains("These answers are also accepted:", texts);
     }
 
     private static CheckReport FailedReport(Question question)

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The macOS app bundle's description. package.sh fills in the version. -->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>SQL Homework Validator</string>
+    <key>CFBundleDisplayName</key>
+    <string>SQL Homework Validator</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.speakinginbits.homeworkvalidator</string>
+    <key>CFBundleExecutable</key>
+    <string>HomeworkValidator</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleVersion</key>
+    <string>{{VERSION}}</string>
+    <key>CFBundleShortVersionString</key>
+    <string>{{VERSION}}</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+</dict>
+</plist>

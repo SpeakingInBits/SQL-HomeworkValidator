@@ -96,6 +96,9 @@
                 <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Margin="0,10,0,6">
                     <Button Classes="accent" Content="Check (F5)" Command="{Binding CheckCommand}" />
                     <Button Content="Open .sql file..." Click="OpenFile_Click" />
+                    <!-- Only once the instructor allows it for the assignment (showSolutions in assignment.yaml) -->
+                    <ToggleButton Content="Show solution" IsChecked="{Binding SelectedQuestion.IsSolutionShown, FallbackValue=False}"
+                                  IsVisible="{Binding SelectedQuestion.CanShowSolution, FallbackValue=False}" />
                     <TextBlock Classes="muted" VerticalAlignment="Center" FontSize="12"
                                Text="Your answer is saved automatically." />
                 </StackPanel>
@@ -109,13 +112,36 @@
                 <GridSplitter Grid.Row="4" Height="6" Background="Transparent" ResizeDirection="Rows" />
 
                 <ScrollViewer Grid.Row="5" Padding="0,0,0,16">
-                    <Panel>
-                        <TextBlock Classes="muted" Text="Write your query above, then click Check (F5)."
-                                   IsVisible="{Binding SelectedQuestion.Result, Converter={x:Static ObjectConverters.IsNull}}" />
-                        <!-- Bindings on this element see the ResultViewModel, so IsVisible looks at its own DataContext. -->
-                        <views:ResultView DataContext="{Binding SelectedQuestion.Result}"
-                                          IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                    </Panel>
+                    <StackPanel Spacing="12">
+                        <!-- The reference solution, and other answers that are also accepted -->
+                        <Border Padding="12,8" CornerRadius="6" Background="{DynamicResource PanelBrush}"
+                                IsVisible="{Binding SelectedQuestion.IsSolutionShown, FallbackValue=False}">
+                            <StackPanel Spacing="6">
+                                <TextBlock Classes="heading" Text="Solution" />
+                                <SelectableTextBlock Text="{Binding SelectedQuestion.Solution}" TextWrapping="Wrap"
+                                                     FontFamily="{StaticResource CodeFont}" FontSize="13" />
+                                <StackPanel Spacing="6" IsVisible="{Binding SelectedQuestion.HasAlternatives, FallbackValue=False}">
+                                    <TextBlock Classes="muted" Margin="0,6,0,0" Text="These answers are also accepted:" />
+                                    <ItemsControl ItemsSource="{Binding SelectedQuestion.Alternatives}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="x:String">
+                                                <SelectableTextBlock Text="{Binding}" TextWrapping="Wrap" Margin="0,0,0,6"
+                                                                     FontFamily="{StaticResource CodeFont}" FontSize="13" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Panel>
+                            <TextBlock Classes="muted" Text="Write your query above, then click Check (F5)."
+                                       IsVisible="{Binding SelectedQuestion.Result, Converter={x:Static ObjectConverters.IsNull}}" />
+                            <!-- Bindings on this element see the ResultViewModel, so IsVisible looks at its own DataContext. -->
+                            <views:ResultView DataContext="{Binding SelectedQuestion.Result}"
+                                              IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        </Panel>
+                    </StackPanel>
                 </ScrollViewer>
             </Grid>
         </Grid>
