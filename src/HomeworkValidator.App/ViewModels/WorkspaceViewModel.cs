@@ -22,6 +22,7 @@ public partial class WorkspaceViewModel : ViewModelBase
     private readonly AnswerStore _answers;
     private readonly Action _changeConnection;
     private readonly DispatcherTimer _autoSave;
+    private readonly DispatcherTimer _fileWatch;
 
     public WorkspaceViewModel(ContentLibrary content, ServerConnection server, ServerInfo info, AnswerStore answers, Action changeConnection)
     {
@@ -40,6 +41,11 @@ public partial class WorkspaceViewModel : ViewModelBase
         _autoSave = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _autoSave.Tick += (_, _) => SaveAnswers();
         _autoSave.Start();
+
+        // Answers opened from a .sql file follow that file when it's saved in another editor.
+        _fileWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _fileWatch.Tick += (_, _) => RefreshLinkedFiles();
+        _fileWatch.Start();
     }
 
     public string ServerDescription { get; }
@@ -107,6 +113,8 @@ public partial class WorkspaceViewModel : ViewModelBase
         if (SelectedQuestion is not { } question)
             return;
 
+        // A file saved a moment ago in another editor may not have been picked up yet.
+        question.RefreshLinkedFile();
         question.Save(_answers);
         IsBusy = true;
         Problem = null;
@@ -140,6 +148,7 @@ public partial class WorkspaceViewModel : ViewModelBase
     private void ChangeConnection()
     {
         _autoSave.Stop();
+        _fileWatch.Stop();
         _changeConnection();
     }
 
@@ -150,10 +159,38 @@ public partial class WorkspaceViewModel : ViewModelBase
             question.Document.Text = sql;
     }
 
+    /// <summary>Loads a .sql file into the selected question and keeps it in step with the file.</summary>
+    public void OpenFile(string path)
+    {
+        try
+        {
+            SelectedQuestion?.OpenFile(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Problem = $"Couldn't open {Path.GetFileName(path)}: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private void LoadChangedFile() => SelectedQuestion?.LoadChangedFile();
+
+    [RelayCommand]
+    private void KeepEdits() => SelectedQuestion?.KeepEdits();
+
+    [RelayCommand]
+    private void UnlinkFile() => SelectedQuestion?.Unlink();
+
     public void SaveAnswers()
     {
         foreach (var question in Assignments.SelectMany(a => a.Questions))
             question.Save(_answers);
+    }
+
+    public void RefreshLinkedFiles()
+    {
+        foreach (var question in Assignments.SelectMany(a => a.Questions))
+            question.RefreshLinkedFile();
     }
 
     private bool IsIdle() => !IsBusy;

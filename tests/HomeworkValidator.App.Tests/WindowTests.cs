@@ -73,6 +73,33 @@ public class WindowTests
     }
 
     [AvaloniaFact]
+    public void Workspace_shows_the_linked_file_and_asks_when_both_changed()
+    {
+        var viewModel = new MainViewModel(Content);
+        var workspace = new WorkspaceViewModel(Content, ServerConnection.Create("example-server", "sa", "x"),
+            new ServerInfo("17.0.1000.7", "Developer Edition (64-bit)", true), new AnswerStore(TestAppBuilder.NewTempFolder()), () => { });
+        viewModel.CurrentPage = workspace;
+        var question = workspace.Assignments.SelectMany(a => a.Questions).Single(q => q.Question.Id == "mgs-hw1/q3");
+        workspace.SelectedNode = question;
+
+        var file = Path.Combine(TestAppBuilder.NewTempFolder(), "my-answer.sql");
+        File.WriteAllText(file, "SELECT ProductName FROM Products;");
+        workspace.OpenFile(file);
+        var window = Show(viewModel);
+
+        Assert.Contains("Linked to my-answer.sql. Saving it in another editor updates your answer here.", VisibleTexts(window));
+
+        question.Document.Text = "SELECT ProductName, ListPrice FROM Products;";
+        File.WriteAllText(file, "SELECT ProductName, DateAdded FROM Products;");
+        File.SetLastWriteTimeUtc(file, DateTime.UtcNow.AddSeconds(5));
+        workspace.RefreshLinkedFiles();
+        TestAppBuilder.SaveScreenshot(window, "workspace-linked-file-changed");
+
+        Assert.Contains("my-answer.sql was saved, but you also changed your answer here. Which one do you want?", VisibleTexts(window));
+        Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.Content as string == "Load the file" && b.IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
     public void Solution_is_offered_only_when_the_assignment_allows_it()
     {
         // MyGuitarShop homework 1 allows solutions, with an extra accepted answer for question 3; everything else keeps the defaults.
