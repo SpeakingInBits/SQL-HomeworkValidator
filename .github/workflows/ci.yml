@@ -49,7 +49,7 @@ jobs:
           --health-start-period 20s
     env:
       HV_CONNECTION_STRING: Server=localhost,1433;User ID=sa;Password=HvCiPassw0rd2025;TrustServerCertificate=true
-      # Turns on the desktop app's end-to-end test, which is skipped without a server.
+      # Turns on the desktop app tests that need a server; they skip themselves without it.
       HV_TEST_CONNECTION_STRING: Server=localhost,1433;User ID=sa;Password=HvCiPassw0rd2025;TrustServerCertificate=true
     steps:
       - uses: actions/checkout@v5
@@ -67,5 +67,5 @@ jobs:
       - name: Verify solutions and mutants
         run: dotnet run --project src/HomeworkValidator.Cli --configuration Release --no-build -- verify
 
-      - name: Desktop app end-to-end test
-        run: dotnet test tests/HomeworkValidator.App.Tests --configuration Release --filter "FullyQualifiedName~EndToEndTests"
+      - name: Desktop app end-to-end and user journey tests
+        run: dotnet test tests/HomeworkValidator.App.Tests --configuration Release --filter "Category=NeedsSqlServer"

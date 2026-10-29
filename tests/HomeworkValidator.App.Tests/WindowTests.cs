@@ -52,7 +52,7 @@ public class WindowTests
         var viewModel = new MainViewModel(Content);
         // Nothing connects until a command runs, so a made-up server is fine for layout.
         var workspace = new WorkspaceViewModel(Content, ServerConnection.Create("example-server", "sa", "x"),
-            new ServerInfo("17.0.1000.7", "Developer Edition (64-bit)", true), new AnswerStore(), () => { });
+            new ServerInfo("17.0.1000.7", "Developer Edition (64-bit)", true), new AnswerStore(TestAppBuilder.NewTempFolder()), () => { });
         viewModel.CurrentPage = workspace;
 
         var question = workspace.Assignments[1].Questions[2]; // mgs-hw1/q3

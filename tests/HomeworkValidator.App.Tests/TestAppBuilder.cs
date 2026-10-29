@@ -22,6 +22,14 @@ public static class TestAppBuilder
     internal static void UseTemporaryAppData() =>
         Environment.SetEnvironmentVariable("HV_APP_DATA", Path.Combine(Path.GetTempPath(), "hv-app-tests-" + Environment.ProcessId));
 
+    /// <summary>A new empty folder for one test's settings and saved answers.</summary>
+    public static string NewTempFolder()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "hv-app-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
     /// <summary>Saves what the window looks like to bin/.../screenshots/&lt;name&gt;.png, for a person to look at.</summary>
     public static string SaveScreenshot(Window window, string name)
     {

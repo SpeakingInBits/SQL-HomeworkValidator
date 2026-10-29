@@ -21,9 +21,9 @@ public sealed class AnswerStore
     private readonly string _root;
     private readonly Dictionary<string, QuestionStatus> _statuses;
 
-    public AnswerStore(string? root = null)
+    public AnswerStore(string root)
     {
-        _root = root ?? Path.Combine(AppDataFolder.Root, "answers");
+        _root = root;
         _statuses = LoadStatuses();
     }
 

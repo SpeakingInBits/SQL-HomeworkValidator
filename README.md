@@ -39,7 +39,15 @@ The validator only creates and drops databases whose names start with `HV_` and 
 dotnet test
 ```
 
-The desktop app's tests render windows headlessly and save screenshots to `tests/HomeworkValidator.App.Tests/bin/<config>/net10.0/screenshots/`. Its end-to-end test runs only when `HV_TEST_CONNECTION_STRING` is set, for example `Server=localhost;Integrated Security=true;TrustServerCertificate=true`.
+The desktop app's tests render windows headlessly and save screenshots to `tests/HomeworkValidator.App.Tests/bin/<config>/net10.0/screenshots/`.
+
+The user journey tests (`UserJourneyTests`) use the app the way a student would, through `AppDriver`. They find controls by their on-screen text, click with the mouse and type with the keyboard, and they never call view-model code directly. Each step saves a numbered screenshot, such as `journey-03-wrong-answer.png`.
+
+Tests marked `[Trait("Category", "NeedsSqlServer")]` run only when `HV_TEST_CONNECTION_STRING` is set, for example `Server=localhost;Integrated Security=true;TrustServerCertificate=true`. CI's `verify` job sets it. To run just those:
+
+```bash
+dotnet test tests/HomeworkValidator.App.Tests --filter "Category=NeedsSqlServer"
+```
 
 ## Adding questions
 

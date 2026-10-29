@@ -40,8 +40,12 @@
                              IsVisible="{Binding ConnectCommand.IsRunning}" />
             </StackPanel>
 
-            <SelectableTextBlock Text="{Binding Error}" Classes="fail" TextWrapping="Wrap"
-                                 IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <StackPanel Spacing="4" IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <SelectableTextBlock Text="{Binding Error}" Classes="fail" TextWrapping="Wrap" />
+                <SelectableTextBlock Text="{Binding ErrorDetails, StringFormat='Details: {0}'}" Classes="muted" FontSize="12"
+                                     TextWrapping="Wrap"
+                                     IsVisible="{Binding ErrorDetails, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </StackPanel>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

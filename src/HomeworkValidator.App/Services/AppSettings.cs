@@ -10,14 +10,14 @@ public sealed class AppSettings
     public bool UseWindowsAuthentication { get; set; } = OperatingSystem.IsWindows();
     public string? User { get; set; }
 
-    private static string FilePath => Path.Combine(AppDataFolder.Root, "settings.json");
+    private static string FilePath(string folder) => Path.Combine(folder, "settings.json");
 
-    public static AppSettings Load()
+    public static AppSettings Load(string folder)
     {
         try
         {
-            return File.Exists(FilePath)
-                ? JsonSerializer.Deserialize(File.ReadAllText(FilePath), AppJsonContext.Default.AppSettings) ?? new AppSettings()
+            return File.Exists(FilePath(folder))
+                ? JsonSerializer.Deserialize(File.ReadAllText(FilePath(folder)), AppJsonContext.Default.AppSettings) ?? new AppSettings()
                 : new AppSettings();
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
@@ -27,14 +27,14 @@ public sealed class AppSettings
         }
     }
 
-    public void Save()
+    public void Save(string folder)
     {
-        Directory.CreateDirectory(AppDataFolder.Root);
-        File.WriteAllText(FilePath, JsonSerializer.Serialize(this, AppJsonContext.Default.AppSettings));
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(FilePath(folder), JsonSerializer.Serialize(this, AppJsonContext.Default.AppSettings));
     }
 }
 
-/// <summary>Where the app keeps settings and saved answers. HV_APP_DATA overrides it (used by tests).</summary>
+/// <summary>Where the app keeps settings and saved answers by default. HV_APP_DATA overrides it.</summary>
 public static class AppDataFolder
 {
     public static string Root =>
