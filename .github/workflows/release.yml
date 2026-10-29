@@ -1,0 +1,121 @@
+name: Release
+
+# Run from the Actions tab: builds the desktop app for every platform and publishes a GitHub release with the packages.
+on:
+  workflow_dispatch:
+    inputs:
+      change:
+        description: What's in this release (picks the next version number)
+        type: choice
+        options:
+          - Bug fixes
+          - New features
+          - Breaking changes
+        default: Bug fixes
+      version:
+        description: Version number, e.g. 1.0.0 (optional; overrides the calculated one)
+        type: string
+        required: false
+  # Pull requests that change the packaging build every package without releasing, so problems show up before a release.
+  pull_request:
+    branches: [main]
+    paths:
+      - packaging/**
+      - .github/workflows/release.yml
+
+permissions:
+  contents: read
+
+# Two releases at once could pick the same version number.
+concurrency:
+  group: release-${{ github.event_name }}
+
+jobs:
+  version:
+    name: version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+    steps:
+      - name: Only release from main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Releases are made from main. Choose main in 'Use workflow from'."
+          exit 1
+
+      - uses: actions/checkout@v5
+        with:
+          # The tags are needed to find the latest release.
+          fetch-depth: 0
+
+      - name: Next version
+        id: next
+        env:
+          # Pull requests have no inputs.
+          CHANGE: ${{ inputs.change || 'Bug fixes' }}
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          version=$(bash packaging/next-version.sh "$CHANGE" "$REQUESTED")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$version" >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: build (${{ matrix.os }})
+    needs: version
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rids: win-x64 win-arm64
+          # macOS packages are built on a Mac, which can sign them.
+          - os: macos-latest
+            rids: osx-arm64 osx-x64
+          - os: ubuntu-latest
+            rids: linux-x64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build and package
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          RIDS: ${{ matrix.rids }}
+        run: bash packaging/package.sh $RIDS
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ matrix.os }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: release
+    needs: [version, build]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: packages-*
+          merge-multiple: true
+          path: dist
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          sed "s/{{VERSION}}/$VERSION/g" packaging/release-notes.md > notes.md
+          # The install instructions come first, then GitHub's list of changes since the last release.
+          gh release create "v$VERSION" dist/* --target "$GITHUB_SHA" --title "v$VERSION" --notes-file notes.md --generate-notes

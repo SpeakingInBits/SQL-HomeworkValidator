@@ -49,6 +49,16 @@ Tests marked `[Trait("Category", "NeedsSqlServer")]` run only when `HV_TEST_CONN
 dotnet test tests/HomeworkValidator.App.Tests --filter "Category=NeedsSqlServer"
 ```
 
+## Releases
+
+Run the **Release** workflow from the repository's Actions tab, on `main`. Choose whether the release has bug fixes, new features or breaking changes, and it picks the next version number from the latest `vX.Y.Z` tag (or type a version to use instead). It builds the app for Windows, macOS and Linux and publishes a GitHub release with the packages and install instructions.
+
+To build a package locally, from the repository root (macOS packages need a Mac, which signs them):
+
+```bash
+VERSION=0.0.1 packaging/package.sh win-x64
+```
+
 ## Adding questions
 
 Questions live in `content/assignments/<assignment>/`. See "Question format" in [PLAN.md](PLAN.md). After adding or changing one, run `hv verify <assignment>`. If one of your known-wrong answers passes, add rows to the database's `datasets/edge.sql` that tell it apart.

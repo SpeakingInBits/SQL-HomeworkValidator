@@ -1,1 +1,3 @@
 * text=auto
+# Shell scripts run in bash on every runner, including Windows, so they must keep LF endings.
+*.sh text eol=lf

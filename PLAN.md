@@ -42,7 +42,7 @@ content/
       ...same layout
   assignments/
     ap-hw1/
-      assignment.yaml     # title and database
+      assignment.yaml     # title, database, and when to offer solutions
       q5.yaml             # prompt, compare options, rules, hints
       q5.sql              # reference solution
       q5.mutants/         # known-wrong answers that must fail
@@ -191,7 +191,15 @@ Per-question options:
 
 ## Question format
 
-Each assignment folder has an `assignment.yaml` (`title`, `database`) and one `q<n>.yaml` per question. Question IDs are `<assignment>/q<n>`, e.g. `mgs-hw1/q2`.
+Each assignment folder has an `assignment.yaml` and one `q<n>.yaml` per question. Question IDs are `<assignment>/q<n>`, e.g. `mgs-hw1/q2`.
+
+```yaml
+title: AP Homework 1
+database: AP
+showSolutions: 2026-12-15        # optional: true, false (the default), or the first day to offer "Show solution"
+```
+
+A date lets solutions appear after the due date without a new release. It uses the student's own clock, which is fine since the solutions ship inside the app anyway.
 
 ```yaml
 title: Customer full names, M to Z
@@ -262,13 +270,16 @@ Probe names are shown to the student when a probe behaves differently, so write 
 2. **Setup status:** a bar across the top. The `HV_` databases are built or updated automatically after connecting, with progress shown; a "Set up databases" button retries if that failed.
 3. **Assignments:** a tree of assignments and questions, each marked passed, failed or not checked. Status is saved between sessions.
 4. **Question:** prompt, SQL editor with syntax highlighting (AvaloniaEdit + TextMate), "Open .sql file", and Check (F5 or Ctrl+Enter). Answers are saved automatically. An opened file stays linked for the session: saving it in another editor (SSMS, VS Code) reloads the answer, checked every second and again before each check. If the student also changed the answer in the app, it asks which to keep.
-5. **Results:** a pass/fail banner, then per dataset: the message, tables of missing rows and rows that shouldn't be there (up to 25 each), and the hint. Also notes (such as an ignored USE), errors and rule violations. Not done yet: showing the student's full result next to the expected one, and a "Show solution" button (an instructor setting per assignment, e.g. after the due date).
+5. **Results:** a pass/fail banner, then per dataset: the message, tables of missing rows and rows that shouldn't be there (up to 25 each), and the hint. Also notes (such as an ignored USE), errors and rule violations. A "Show solution" toggle appears once the assignment's `showSolutions` allows it, and shows the reference solution and any alternatives above the results.
 
 ## Distribution
 
-- Self-contained single-file builds for `win-x64`, `win-arm64`, `osx-arm64`, `osx-x64`, `linux-x64`, with trimming and single-file compression.
-- **macOS:** unsigned apps are blocked by Gatekeeper. Either sign and notarize (Apple Developer account, $99/year) or give students instructions to allow the app.
-- **Windows:** unsigned apps show a SmartScreen warning. Code signing removes it.
+- The **Release** workflow (`.github/workflows/release.yml`), run by hand from the Actions tab on `main`, builds every platform and publishes a GitHub release with install instructions (`packaging/release-notes.md`). It asks whether the release has bug fixes, new features or breaking changes and bumps the patch, minor or major number of the latest `vX.Y.Z` tag, unless a version is typed in.
+- Self-contained single-file builds for `win-x64`, `win-arm64`, `osx-arm64`, `osx-x64`, `linux-x64`, with single-file compression (`packaging/package.sh`). They aren't trimmed: YamlDotNet and SqlClient use reflection, and a trimmed build can't load the content.
+- Packages: a zip with `HomeworkValidator.exe` and the `content` folder on Windows; a zipped `SQL Homework Validator.app` on macOS, with the content in `Contents/Resources`; a `.tar.gz` on Linux.
+- **Signing:** none for now. The release notes tell students how to get past the warnings.
+  - **macOS:** Gatekeeper blocks unsigned apps until the student clicks Open Anyway in Privacy & Security (or removes the quarantine flag with `xattr`). The bundle gets an ad-hoc signature, which is free and lets Apple silicon run it but doesn't satisfy Gatekeeper. Notarizing needs an Apple Developer account ($99/year).
+  - **Windows:** SmartScreen warns until the student clicks More info → Run anyway. Code signing removes it.
 
 ## Milestones
 
@@ -277,7 +288,7 @@ Probe names are shown to the student when a probe behaves differently, so write 
 3. **Avalonia app for SELECT** (done): connection page, automatic database setup, question tree with saved status, SQL editor with saved answers, and results with differences and hints. Avalonia 12.
 4. **DML questions** (done): `ap-hw2` and `mgs-hw2`, with setup chains, notes, alternatives and presence-only columns. AP exercise 5 means paying the invoice off (`PaymentTotal = InvoiceTotal - CreditTotal`); setting PaymentTotal to the balance itself is one of its mutants. The AP edge data gained an invoice that makes AP exercises 6 and 7 actually change something; in the course data they don't. The app shows which table differs, and a user journey test covers a DML question.
 5. **DDL questions** (done): `scripting-hw1` on a new, empty Membership database, plus one AP exercise (a question can name its own `database`). Database-level statements are skipped rather than renamed; the design is compared from the catalog, and probes test constraints and defaults.
-6. **Packaging:** builds per platform, signing, install instructions for students.
+6. **Packaging:** builds per platform and install instructions for students (the Release workflow). Signing is postponed.
 
 ## Open questions
 
