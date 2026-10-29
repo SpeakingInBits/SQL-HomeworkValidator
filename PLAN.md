@@ -39,13 +39,13 @@ content/
     AP/
       ...same layout
   assignments/
-    hw03/
-      assignment.yaml
-      q05.yaml            # prompt, kind, database, compare options, rules, hints
-      q05.sql             # reference solution
-      q05.mutants/        # known-wrong answers that must fail
-        inner-join.sql
-        hardcoded-id.sql
+    ap-hw1/
+      assignment.yaml     # title and database
+      q5.yaml             # prompt, compare options, rules, hints
+      q5.sql              # reference solution
+      q5.mutants/         # known-wrong answers that must fail
+        exclusive-range.sql
+        no-filter.sql
 ```
 
 The desktop app only collects input and shows results; Core does the work. That keeps the logic testable and gives the instructor a command-line tool from the same code. `content/` is embedded in the app at build time.
@@ -160,19 +160,32 @@ Per-question options:
 
 ## Question format
 
+Each assignment folder has an `assignment.yaml` (`title`, `database`) and one `q<n>.yaml` per question. Question IDs are `<assignment>/q<n>`, e.g. `mgs-hw1/q2`.
+
 ```yaml
-id: hw3-q5
-database: MyGuitarShop
-prompt: List categories that have no products.
-kind: select
-compare: { ordered: false, columns: by-position }
-rules: { require: [Join], forbid: [Subquery] }
-datasets: [base, edge, shifted]
+title: Customer full names, M to Z
+prompt: |
+  Write a SELECT statement that returns one column ...
+kind: select                     # default
+datasets: [base, edge, shifted]  # default: all of the database's datasets
+compare:
+  columns: by-name               # default; or by-position, or row-count when the question doesn't name columns
+  decimals: 2                    # round numbers before comparing
+  order:                         # sort keys, by result column; omit for unordered questions
+    - column: FullName
+      keyPattern: "^[^,]*"       # optional: only this part of the value is the key (here, the last name)
+rules:
+  require: [Where]
+  forbid: [From, AliasWithoutAs]
 hints:
   edge: Check how your query treats products with no category.
 ```
 
-The reference solution sits next to it as `q05.sql`.
+The reference solution sits next to it as `q<n>.sql`, and known-wrong answers go in `q<n>.mutants/*.sql`.
+
+**Ordered comparison and ties.** Rows are first compared as a multiset. Then, for ordered questions, the sequence of sort-key values must match the reference's. Rows that tie on the sort keys can therefore come in any order, which is what SQL Server itself guarantees. (MyGuitarShop has two products at 799.99, for example.)
+
+**Rules** available: `From`, `Where`, `Join` (including `FROM a, b`), `Subquery`, `Cte`, `OrderBy` (the statement's own, not `OVER (ORDER BY …)`), `GroupBy`, `Having`, `Distinct`, `Top`, `SelectStar`, `Union`, `AliasWithoutAs`.
 
 ### Instructor commands
 
@@ -195,8 +208,14 @@ The reference solution sits next to it as `q05.sql`.
 
 ## Milestones
 
-1. **Core + CLI, SELECT only:** split both course scripts into schema and base data, build `HV_` databases, run a student query and the reference solution, compare, report. Tested against one real assignment.
-2. **Content:** question format, `edge` and `shifted` datasets for both databases, `hv verify` with mutants.
+1. **Core + CLI, SELECT only** (done): split both course scripts into schema and base data, build `HV_` databases, run a student query and the reference solution, compare, report. Question format, `hv verify` with mutants, and the first homework for each database (`ap-hw1`, `mgs-hw1`).
+2. **Edge and shifted datasets** for both databases. On base data alone, `hv verify` shows four wrong answers that can't be caught yet; the edge dataset must catch them:
+   - `ap-hw1/q5`: `> 500 AND < 10000` instead of `BETWEEN` (no invoice is exactly 500 or 10,000)
+   - `ap-hw1/q7`: checking only one half of the compound condition (base data has no invalid payment dates)
+   - `mgs-hw1/q2`: `LastName > 'M'` instead of `>= 'M'` (no customer's last name is exactly "M")
+   - `mgs-hw1/q3`: `>= 500 AND <= 2000` (no product is priced exactly 500 or 2000)
+
+   Also: integration tests against a real SQL Server (Testcontainers) so CI can run `hv verify`.
 3. **Avalonia app for SELECT:** connection dialog, setup status, question list, editor, results with differences.
 4. **DML questions:** throwaway databases, table-state comparison.
 5. **DDL questions:** rename step, schema comparison, behavior tests.

@@ -1,0 +1,16 @@
+title: Customer full names, M to Z
+prompt: |
+  Write a SELECT statement that returns one column from the Customers table named
+  FullName that joins the LastName and FirstName columns. Format this column with
+  the last name, a comma, a space, and the first name like this:
+
+    Doe, John
+
+  Sort the result set by last name in ascending sequence. Return only the contacts
+  whose last name begins with a letter from M to Z.
+compare:
+  # Sorted by last name only, so customers sharing a last name may come in any order.
+  # The sort key is the part of FullName before the comma.
+  order:
+    - column: FullName
+      keyPattern: "^[^,]*"

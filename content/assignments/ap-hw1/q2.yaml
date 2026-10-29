@@ -1,0 +1,13 @@
+title: Invoice balances with column aliases
+prompt: |
+  Write a SELECT statement that returns four columns from the Invoices table,
+  named Number, Total, Credits, and Balance:
+
+    Number   Column alias for the InvoiceNumber column
+    Total    Column alias for the InvoiceTotal column
+    Credits  Sum of the PaymentTotal and CreditTotal columns
+    Balance  InvoiceTotal minus the sum of PaymentTotal and CreditTotal
+
+  Use the AS keyword to assign column aliases.
+rules:
+  forbid: [AliasWithoutAs]

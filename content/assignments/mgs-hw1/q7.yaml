@@ -1,0 +1,14 @@
+title: Tax calculation without a FROM clause
+prompt: |
+  Write a SELECT statement without a FROM clause that creates a row with these
+  columns:
+
+    Price      100 (dollars)
+    TaxRate    .07 (7 percent)
+    TaxAmount  The price multiplied by the tax rate
+    Total      The price plus tax
+
+  To calculate the fourth column, add the expressions you used for the first and
+  third columns.
+rules:
+  forbid: [From]
