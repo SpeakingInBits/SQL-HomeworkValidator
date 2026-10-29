@@ -83,10 +83,20 @@ public sealed partial class ContentLibrary
             if (!File.Exists(schemaPath))
                 throw new ContentException($"{schemaPath} is missing.");
 
-            var datasets = Directory.GetFiles(Path.Combine(dbDir, "datasets"), "*.sql")
+            var datasetsDir = Path.Combine(dbDir, "datasets");
+            var hintsPath = Path.Combine(datasetsDir, "hints.yaml");
+            var hints = File.Exists(hintsPath)
+                ? new Dictionary<string, string>(Deserialize<Dictionary<string, string>>(hintsPath), StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            var datasets = Directory.GetFiles(datasetsDir, "*.sql")
                 .Order(StringComparer.OrdinalIgnoreCase)
-                .Select(p => new Dataset(Path.GetFileNameWithoutExtension(p), File.ReadAllText(p)))
+                .Select(path => (Path: path, Name: Path.GetFileNameWithoutExtension(path)))
+                .Select(f => new Dataset(f.Name, ReadScript(f.Path, []), hints.GetValueOrDefault(f.Name)))
                 .ToList();
+
+            foreach (var key in hints.Keys.Where(k => datasets.All(d => !d.Name.Equals(k, StringComparison.OrdinalIgnoreCase))))
+                throw new ContentException($"{hintsPath}: hint for '{key}', which isn't a dataset.");
 
             if (datasets.Count == 0)
                 throw new ContentException($"Database '{name}' has no datasets.");
@@ -99,6 +109,28 @@ public sealed partial class ContentLibrary
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Reads a dataset script, replacing sqlcmd-style <c>:r file.sql</c> lines with that file's contents
+    /// (relative to the including file), so the edge dataset can build on base without copying it.
+    /// </summary>
+    private static string ReadScript(string path, HashSet<string> including)
+    {
+        var fullPath = Path.GetFullPath(path);
+        if (!File.Exists(fullPath))
+            throw new ContentException($"{path} is missing.");
+        if (!including.Add(fullPath))
+            throw new ContentException($"{path} includes itself through ':r'.");
+
+        var text = IncludeLine().Replace(File.ReadAllText(fullPath), match =>
+        {
+            var file = match.Groups[1].Value.Trim().Trim('"');
+            return ReadScript(Path.Combine(Path.GetDirectoryName(fullPath)!, file), including).TrimEnd() + Environment.NewLine + "GO";
+        });
+
+        including.Remove(fullPath);
+        return text;
     }
 
     private static List<Assignment> LoadAssignments(string dir, List<CourseDatabase> databases)
@@ -246,6 +278,9 @@ public sealed partial class ContentLibrary
 
     [GeneratedRegex("^[A-Za-z0-9_]+$")]
     private static partial Regex SafeName();
+
+    [GeneratedRegex(@"^[ \t]*:r[ \t]+(.+?)[ \t]*\r?$", RegexOptions.IgnoreCase | RegexOptions.Multiline)]
+    private static partial Regex IncludeLine();
 
     [GeneratedRegex(@"^q(\d+)$", RegexOptions.IgnoreCase)]
     private static partial Regex QuestionFileName();

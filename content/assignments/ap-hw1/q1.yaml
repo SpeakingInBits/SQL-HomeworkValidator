@@ -5,3 +5,5 @@ prompt: |
   last name, then by first name. (This should be answered with a single query.)
 compare:
   order: [VendorContactLName, VendorContactFName]
+hints:
+  edge: Two contacts share the last name Ellis. Within the same last name, sort by first name.

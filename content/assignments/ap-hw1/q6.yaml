@@ -4,3 +4,5 @@ prompt: |
   with the letter A, B, C, or E.
 compare:
   order: [Full Name]
+hints:
+  edge: Two contacts share the last name Ellis. Within the same last name, sort by first name.

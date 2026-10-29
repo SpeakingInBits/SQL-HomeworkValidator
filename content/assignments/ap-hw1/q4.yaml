@@ -12,3 +12,5 @@ prompt: |
 compare:
   order: [InvoiceTotal]
   decimals: 2
+hints:
+  edge: Check an invoice whose balance due is exactly 1,000. "Greater than" doesn't include it.

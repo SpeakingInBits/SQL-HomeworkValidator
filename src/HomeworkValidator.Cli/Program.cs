@@ -12,8 +12,12 @@ const string Usage = """
       list                         List assignments and questions
       show <question>              Print a question
       check <question> <file.sql>  Check your answer to a question
-      verify [assignment|question] Instructor: check reference solutions and mutants
       clean                        Drop all databases the validator created
+
+    Instructor commands:
+      verify [assignment|question] Check reference solutions and mutants
+      make-shifted <database>      Regenerate datasets/shifted.sql from base.sql. Run from the repository
+                                   (or pass --content) so it writes to the source content folder.
 
     Options:
       --server <name>       SQL Server to connect to (default: localhost on Windows, localhost,1433 elsewhere)
@@ -34,7 +38,10 @@ if (options.Command is null or "help" or "--help" or "-h")
 
 try
 {
-    var content = ContentLibrary.Load(options.ContentRoot ?? ContentLibrary.FindRoot(AppContext.BaseDirectory));
+    // make-shifted edits content, so it uses the source folder found from the current directory, not the copy next to hv.
+    var contentRoot = options.ContentRoot
+        ?? ContentLibrary.FindRoot(options.Command == "make-shifted" ? Environment.CurrentDirectory : AppContext.BaseDirectory);
+    var content = ContentLibrary.Load(contentRoot);
     var server = options.CreateConnection();
     var databases = new DatabaseManager(server);
     var checker = new Checker(content, databases, new QueryRunner(server));
@@ -48,6 +55,7 @@ try
         "check" => await Commands.CheckAsync(content, checker, options.Arg(0, "question"), options.Arg(1, "file.sql"), output),
         "verify" => await Commands.VerifyAsync(content, new Verifier(checker), options.OptionalArg(0), output),
         "clean" => await Commands.CleanAsync(databases, output),
+        "make-shifted" => Commands.MakeShifted(content, options.Arg(0, "database"), output),
         _ => throw new UsageException($"Unknown command '{options.Command}'."),
     };
 }

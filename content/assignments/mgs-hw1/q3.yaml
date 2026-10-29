@@ -12,3 +12,5 @@ prompt: |
   Sort the result set in descending sequence by the DateAdded column.
 compare:
   order: [DateAdded]
+hints:
+  edge: Check products priced exactly 500 and exactly 2000. "Greater than" and "less than" don't include them.

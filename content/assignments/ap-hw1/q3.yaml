@@ -6,3 +6,5 @@ prompt: |
   "Doe, John"). Sort the result set by last name, then by first name.
 compare:
   order: [Full Name]
+hints:
+  edge: Two contacts share the last name Ellis. Within the same last name, sort by first name.

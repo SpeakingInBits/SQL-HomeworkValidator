@@ -119,10 +119,8 @@ public sealed class DatabaseManager(ServerConnection server)
         await using var connection = await server.OpenAsync(name, ct: ct);
         await SetPropertyAsync(connection, ManagedProperty, "1", ct);
 
-        foreach (var batch in BatchSplitter.Split(database.SchemaSql))
-            await ExecuteAsync(connection, batch, ct, timeoutSeconds: 120);
-        foreach (var batch in BatchSplitter.Split(dataset.Sql))
-            await ExecuteAsync(connection, batch, ct, timeoutSeconds: 120);
+        await RunScriptAsync(connection, database.SchemaSql, $"{database.Name} schema", ct);
+        await RunScriptAsync(connection, dataset.Sql, $"{database.Name} '{dataset.Name}' dataset", ct);
 
         await ExecuteAsync(connection,
             $"CREATE USER {Quote(ReaderUser)} WITHOUT LOGIN; ALTER ROLE db_datareader ADD MEMBER {Quote(ReaderUser)};", ct);
@@ -166,6 +164,24 @@ public sealed class DatabaseManager(ServerConnection server)
         }
 
         return (managed, version);
+    }
+
+    /// <summary>Runs a content script batch by batch. A failure is a problem with the content, not the connection.</summary>
+    private static async Task RunScriptAsync(SqlConnection connection, string script, string description, CancellationToken ct)
+    {
+        foreach (var batch in BatchSplitter.Split(script))
+        {
+            try
+            {
+                await ExecuteAsync(connection, batch, ct, timeoutSeconds: 120);
+            }
+            catch (SqlException ex)
+            {
+                var start = batch.TrimStart().ReplaceLineEndings(" ");
+                throw new ContentException(
+                    $"The {description} script failed: {ex.Message} (in the batch starting '{start[..Math.Min(80, start.Length)]}')");
+            }
+        }
     }
 
     private static async Task SetPropertyAsync(SqlConnection connection, string property, string value, CancellationToken ct)

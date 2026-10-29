@@ -14,3 +14,5 @@ compare:
   order:
     - column: FullName
       keyPattern: "^[^,]*"
+hints:
+  edge: Check a customer whose last name is just "M". "Begins with a letter from M to Z" includes it.

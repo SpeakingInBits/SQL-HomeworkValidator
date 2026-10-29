@@ -18,3 +18,5 @@ prompt: |
 compare:
   order: [ItemTotal]
   decimals: 2
+hints:
+  edge: Check an item whose ItemTotal is exactly 500. "Greater than" doesn't include it.
