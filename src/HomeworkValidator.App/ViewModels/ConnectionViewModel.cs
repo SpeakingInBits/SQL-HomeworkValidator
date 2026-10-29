@@ -10,11 +10,13 @@ namespace HomeworkValidator.App.ViewModels;
 public partial class ConnectionViewModel : ViewModelBase
 {
     private readonly AppSettings _settings;
+    private readonly string _appDataFolder;
     private readonly Action<ServerConnection, ServerInfo> _connected;
 
-    public ConnectionViewModel(AppSettings settings, Action<ServerConnection, ServerInfo> connected)
+    public ConnectionViewModel(AppSettings settings, string appDataFolder, Action<ServerConnection, ServerInfo> connected)
     {
         _settings = settings;
+        _appDataFolder = appDataFolder;
         _connected = connected;
         Server = settings.Server ?? DefaultServer;
         UseWindowsAuthentication = CanUseWindowsAuthentication && settings.UseWindowsAuthentication;
@@ -53,10 +55,15 @@ public partial class ConnectionViewModel : ViewModelBase
     [ObservableProperty]
     public partial string? Error { get; set; }
 
+    /// <summary>The technical message behind <see cref="Error"/>, for when the plain explanation isn't enough.</summary>
+    [ObservableProperty]
+    public partial string? ErrorDetails { get; set; }
+
     [RelayCommand(CanExecute = nameof(CanConnect))]
     private async Task ConnectAsync()
     {
         Error = null;
+        ErrorDetails = null;
         var server = ServerConnection.Create(
             Server.Trim(),
             UseWindowsAuthentication ? null : User.Trim(),
@@ -75,15 +82,31 @@ public partial class ConnectionViewModel : ViewModelBase
             _settings.Server = Server.Trim();
             _settings.UseWindowsAuthentication = UseWindowsAuthentication;
             _settings.User = User.Trim();
-            _settings.Save();
+            _settings.Save(_appDataFolder);
 
             _connected(server, info);
         }
         catch (SqlException ex)
         {
-            Error = $"Couldn't connect to {Server.Trim()}: {ex.Message}";
+            Error = Explain(ex);
+            ErrorDetails = ex.Message;
         }
     }
+
+    /// <summary>A plain-language reason first; SqlClient's own message is shown underneath as details.</summary>
+    private string Explain(SqlException ex) => ex.Number switch
+    {
+        // 18456: wrong login or password.
+        18456 => $"{Server.Trim()} rejected the login. Check the login name and password.",
+        // 233: the server answered but dropped the login. A server set up for Windows authentication only does this to SQL logins.
+        233 when OperatingSystem.IsWindows() =>
+            $"{Server.Trim()} rejected the login. Check the login name and password. If you normally sign in with " +
+            "Windows authentication, choose that instead: this server may not accept SQL Server logins.",
+        233 => $"{Server.Trim()} rejected the login. Check the login name and password.",
+        _ when OperatingSystem.IsWindows() =>
+            $"Couldn't reach {Server.Trim()}. Check that SQL Server is running and that the server name is right.",
+        _ => $"Couldn't reach {Server.Trim()}. Check that your SQL Server container is running (docker ps) and that the server name is right.",
+    };
 
     private bool CanConnect() => !string.IsNullOrWhiteSpace(Server);
 }

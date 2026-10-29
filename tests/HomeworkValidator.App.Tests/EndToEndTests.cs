@@ -13,6 +13,7 @@ namespace HomeworkValidator.App.Tests;
 /// Runs only when HV_TEST_CONNECTION_STRING is set, e.g.
 /// <c>Server=localhost;Integrated Security=true;TrustServerCertificate=true</c>.
 /// </summary>
+[Trait("Category", "NeedsSqlServer")]
 public class EndToEndTests
 {
     [AvaloniaFact]
@@ -23,7 +24,7 @@ public class EndToEndTests
 
         var content = ContentLibrary.Load(ContentLibrary.FindRoot(AppContext.BaseDirectory));
         var server = new ServerConnection(connectionString!);
-        var workspace = new WorkspaceViewModel(content, server, await server.TestAsync(), new AnswerStore(), () => { });
+        var workspace = new WorkspaceViewModel(content, server, await server.TestAsync(), new AnswerStore(TestAppBuilder.NewTempFolder()), () => { });
         var main = new MainViewModel(content) { CurrentPage = workspace };
 
         await workspace.SetUpDatabasesAsync();

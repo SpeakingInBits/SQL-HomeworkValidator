@@ -12,18 +12,22 @@ namespace HomeworkValidator.App.ViewModels;
 public partial class MainViewModel : ViewModelBase
 {
     private readonly ContentLibrary? _content;
-    private readonly AnswerStore _answers = new();
+    private readonly string _appDataFolder;
+    private readonly AnswerStore _answers;
 
     public MainViewModel()
         : this(LoadContent(out var error), error)
     {
     }
 
-    public MainViewModel(ContentLibrary? content, string? contentError = null)
+    /// <param name="appDataFolder">Where settings and answers are kept; tests pass their own folder.</param>
+    public MainViewModel(ContentLibrary? content, string? contentError = null, string? appDataFolder = null)
     {
         _content = content;
         ContentError = contentError;
-        CurrentPage = new ConnectionViewModel(AppSettings.Load(), OnConnected);
+        _appDataFolder = appDataFolder ?? AppDataFolder.Root;
+        _answers = new AnswerStore(Path.Combine(_appDataFolder, "answers"));
+        CurrentPage = new ConnectionViewModel(AppSettings.Load(_appDataFolder), _appDataFolder, OnConnected);
     }
 
     /// <summary>Set when the course content couldn't be loaded; the app can't do anything useful then.</summary>
@@ -50,7 +54,7 @@ public partial class MainViewModel : ViewModelBase
     private void ChangeConnection()
     {
         SaveAll();
-        CurrentPage = new ConnectionViewModel(AppSettings.Load(), OnConnected);
+        CurrentPage = new ConnectionViewModel(AppSettings.Load(_appDataFolder), _appDataFolder, OnConnected);
     }
 
     private static ContentLibrary? LoadContent(out string? error)
