@@ -54,7 +54,6 @@ public class ContentTests
         Assert.NotNull(q1.SetupSql);
         Assert.NotNull(q1.Note);
         Assert.Equal(["ap-hw2/q1"], q5.After);
-        Assert.Equal(["pays-off-balance"], q5.Alternatives.Select(a => a.Name));
         Assert.Equal(["InvoiceCopy.PaymentDate"], q5.Compare.PresenceOnly);
     }
 

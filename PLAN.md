@@ -241,14 +241,13 @@ compare:
 1. **Core + CLI, SELECT only** (done): split both course scripts into schema and base data, build `HV_` databases, run a student query and the reference solution, compare, report. Question format, `hv verify` with mutants, and the first homework for each database (`ap-hw1`, `mgs-hw1`).
 2. **Edge and shifted datasets** (done) for both databases. `hv verify` passes: all 43 mutants for `ap-hw1` and `mgs-hw1` are caught, including the four the base data couldn't catch. CI (GitHub Actions, added in its own PR) builds, runs the unit tests and runs `hv verify` against SQL Server in a container.
 3. **Avalonia app for SELECT** (done): connection page, automatic database setup, question tree with saved status, SQL editor with saved answers, and results with differences and hints. Avalonia 12.
-4. **DML questions** (done): `ap-hw2` and `mgs-hw2`, with setup chains, notes, alternatives and presence-only columns. The AP edge data gained an invoice that makes AP exercises 6 and 7 actually change something; in the course data they don't. The app shows which table differs, and a user journey test covers a DML question.
+4. **DML questions** (done): `ap-hw2` and `mgs-hw2`, with setup chains, notes, alternatives and presence-only columns. AP exercise 5 means paying the invoice off (`PaymentTotal = InvoiceTotal - CreditTotal`); setting PaymentTotal to the balance itself is one of its mutants. The AP edge data gained an invoice that makes AP exercises 6 and 7 actually change something; in the course data they don't. The app shows which table differs, and a user journey test covers a DML question.
 5. **DDL questions:** rename step, schema comparison, behavior tests.
 6. **Packaging:** builds per platform, signing, install instructions for students.
 
 ## Open questions
 
 - **Assignments:** the next homework for each database, as it's ready.
-- **AP homework 2, exercise 5:** "change the PaymentTotal to the balance due" is accepted two ways: `PaymentTotal = InvoiceTotal - PaymentTotal - CreditTotal` (the literal reading, the reference solution) and `PaymentTotal = InvoiceTotal - CreditTotal` (pays the invoice off). They differ only for partly paid invoices. Remove whichever you don't want from `ap-hw2/q5.sql` or `q5.alternatives/`.
 - **"Use the CategoryID column to identify the row"** (MyGuitarShop homework 2, exercises 2 and 3) isn't enforced: `WHERE CategoryName = 'Brass'` gives the same tables and passes. A rule for "WHERE must use column X" could be added if that matters.
 - **Content updates:** ship new assignments only with app releases, or let the app download content separately?
 - **Grading use:** should `hv check` also batch-grade a folder of submissions?

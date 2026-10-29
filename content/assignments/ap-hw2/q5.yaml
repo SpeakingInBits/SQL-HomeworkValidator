@@ -9,7 +9,10 @@ prompt: |
 compare:
   # Any date counts, since students may type a date or use GETDATE().
   presenceOnly: [InvoiceCopy.PaymentDate]
+note: >-
+  Paying the balance due means the invoice is paid off: afterwards PaymentTotal includes what was
+  already paid plus the balance, so nothing is left owing.
 hints:
   edge: >-
-    The edge data has invoices that are partly paid and one paid entirely by a credit.
-    The balance due is InvoiceTotal - PaymentTotal - CreditTotal.
+    The edge data has invoices that are partly paid and one paid entirely by a credit. After your
+    UPDATE, InvoiceTotal - PaymentTotal - CreditTotal should be 0 for every invoice you paid.

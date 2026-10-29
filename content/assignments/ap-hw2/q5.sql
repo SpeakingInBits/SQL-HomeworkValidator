@@ -1,5 +1,6 @@
--- "Change PaymentTotal to the balance due", read literally. q5.alternatives/ accepts the other reading.
+-- Pays each invoice off: PaymentTotal becomes everything paid so far plus the balance due,
+-- which is InvoiceTotal - CreditTotal, so nothing is left owing.
 UPDATE InvoiceCopy
 SET PaymentDate = GETDATE(),
-    PaymentTotal = InvoiceTotal - PaymentTotal - CreditTotal
+    PaymentTotal = InvoiceTotal - CreditTotal
 WHERE InvoiceTotal - PaymentTotal - CreditTotal > 0;
