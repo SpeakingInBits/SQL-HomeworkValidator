@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
@@ -153,7 +154,10 @@ public sealed partial class ContentLibrary
                 .Select(x => LoadQuestion(x.path, x.number, id, database, databases))
                 .ToList();
 
-            var assignment = new Assignment(id, Required(manifest.Title, manifestPath, "title"), database.Name, questions);
+            var assignment = new Assignment(id, Required(manifest.Title, manifestPath, "title"), database.Name, questions)
+            {
+                SolutionsFrom = ParseShowSolutions(manifest.ShowSolutions, manifestPath),
+            };
             CheckAfterReferences(assignment, assignmentDir);
             result.Add(assignment);
         }
@@ -353,10 +357,20 @@ public sealed partial class ContentLibrary
     [GeneratedRegex(@"^q(\d+)$", RegexOptions.IgnoreCase)]
     private static partial Regex QuestionFileName();
 
+    /// <summary><c>showSolutions</c>: true (always), false (never, the default), or the first day to show them, like 2026-12-15.</summary>
+    private static DateOnly? ParseShowSolutions(string? value, string path) => value?.Trim().ToLowerInvariant() switch
+    {
+        null or "" or "false" => null,
+        "true" => DateOnly.MinValue,
+        var text when DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) => date,
+        _ => throw new ContentException($"{path}: showSolutions must be true, false or a date like 2026-12-15, not '{value}'."),
+    };
+
     private sealed class AssignmentYaml
     {
         public string? Title { get; set; }
         public string Database { get; set; } = "";
+        public string? ShowSolutions { get; set; }
     }
 
     private sealed class QuestionYaml

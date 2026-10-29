@@ -13,7 +13,16 @@ public sealed record CourseDatabase(string Name, string SchemaSql, IReadOnlyList
 /// <param name="Hint">Shown when a check fails on this dataset and the question has no hint of its own.</param>
 public sealed record Dataset(string Name, string Sql, string? Hint = null);
 
-public sealed record Assignment(string Id, string Title, string Database, IReadOnlyList<Question> Questions);
+public sealed record Assignment(string Id, string Title, string Database, IReadOnlyList<Question> Questions)
+{
+    /// <summary>
+    /// The day the app starts offering "Show solution" for this assignment's questions, e.g. after the due date
+    /// (<see cref="DateOnly.MinValue"/> for always); null to never offer it. Set with <c>showSolutions</c> in assignment.yaml.
+    /// </summary>
+    public DateOnly? SolutionsFrom { get; init; }
+
+    public bool ShowsSolutions(DateOnly today) => SolutionsFrom is { } from && today >= from;
+}
 
 public enum QuestionKind
 {
