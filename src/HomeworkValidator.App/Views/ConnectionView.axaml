@@ -30,7 +30,12 @@
                 <StackPanel Spacing="4">
                     <TextBlock Text="Password" />
                     <TextBox Text="{Binding Password}" PasswordChar="•" />
-                    <TextBlock Classes="muted" FontSize="12" Text="Not saved. You'll enter it each time you open the app." />
+                    <TextBlock Classes="muted" FontSize="12" Text="Not saved. You'll enter it each time you open the app."
+                               IsVisible="{Binding !CanRememberPassword}" />
+                </StackPanel>
+                <StackPanel Spacing="2" IsVisible="{Binding CanRememberPassword}">
+                    <CheckBox Content="Remember my password on this computer" IsChecked="{Binding RememberPassword}" />
+                    <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{Binding RememberPasswordHelp}" />
                 </StackPanel>
             </StackPanel>
 

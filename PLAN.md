@@ -57,7 +57,7 @@ The desktop app only collects input and shows results; Core does the work. That 
 - **Windows default:** `localhost`, Windows authentication. Offer a list of local instances for named installs such as `localhost\SQLEXPRESS`.
 - **Mac/Linux default:** `localhost,1433`, SQL authentication as `sa`.
 - **Trust server certificate:** on by default. SqlClient encrypts by default, and local installs and the Docker image use self-signed certificates.
-- **Password storage:** not saved (milestone 3). Students on Windows use Windows authentication and don't need one; Docker users type the sa password each time. Saving it in the OS keychain (Windows Credential Manager, macOS Keychain, Secret Service on Linux) can come later if that's annoying.
+- **Password storage:** with SQL authentication, a "Remember my password on this computer" box saves the password in the operating system's password store, never in the app's own files: Windows Credential Manager, the macOS login keychain, or the Secret Service keyring on Linux (through libsecret). The password is saved after a successful connection, filed by login and server, and filled in next time; unticking the box and connecting deletes it. Where there's no keyring (minimal Linux installs, WSL), the box isn't shown. Because the macOS build is only ad-hoc signed, macOS asks once after each update whether the app may use the saved password. The **Password store** workflow tests each store on its own OS when that code changes.
 - **Test connection:** also confirms the login can create databases.
 
 ## Course databases
@@ -266,10 +266,10 @@ Probe names are shown to the student when a probe behaves differently, so write 
 
 ## Screens
 
-1. **Connection:** server, authentication, login and password. Connecting also checks that the login can create databases.
+1. **Connection:** server, authentication, login and password, with "Remember my password" for SQL authentication. Connecting also checks that the login can create databases.
 2. **Setup status:** a bar across the top. The `HV_` databases are built or updated automatically after connecting, with progress shown; a "Set up databases" button retries if that failed.
 3. **Assignments:** a tree of assignments and questions, each marked passed, failed or not checked. Status is saved between sessions.
-4. **Question:** prompt, SQL editor with syntax highlighting (AvaloniaEdit + TextMate), "Open .sql file", and Check (F5 or Ctrl+Enter). Answers are saved automatically. Reloading an opened file when it changes on disk is not done yet.
+4. **Question:** prompt, SQL editor with syntax highlighting (AvaloniaEdit + TextMate), "Open .sql file", and Check (F5 or Ctrl+Enter). Answers are saved automatically. An opened file stays linked for the session: saving it in another editor (SSMS, VS Code) reloads the answer, checked every second and again before each check. If the student also changed the answer in the app, it asks which to keep.
 5. **Results:** a pass/fail banner, then per dataset: the message, tables of missing rows and rows that shouldn't be there (up to 25 each), the hint, and a collapsed section with the student's whole result next to the expected one, each in the order it came back (up to 100 rows each; for scripts, the first table that differs). Also notes (such as an ignored USE), errors and rule violations. A "Show solution" toggle appears once the assignment's `showSolutions` allows it, and shows the reference solution and any alternatives above the results.
 
 ## Distribution

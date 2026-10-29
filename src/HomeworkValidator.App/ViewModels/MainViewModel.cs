@@ -14,6 +14,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly ContentLibrary? _content;
     private readonly string _appDataFolder;
     private readonly AnswerStore _answers;
+    private readonly IPasswordStore _passwords;
 
     public MainViewModel()
         : this(LoadContent(out var error), error)
@@ -21,13 +22,15 @@ public partial class MainViewModel : ViewModelBase
     }
 
     /// <param name="appDataFolder">Where settings and answers are kept; tests pass their own folder.</param>
-    public MainViewModel(ContentLibrary? content, string? contentError = null, string? appDataFolder = null)
+    /// <param name="passwords">Where a remembered password is kept; tests pass their own.</param>
+    public MainViewModel(ContentLibrary? content, string? contentError = null, string? appDataFolder = null, IPasswordStore? passwords = null)
     {
         _content = content;
         ContentError = contentError;
         _appDataFolder = appDataFolder ?? AppDataFolder.Root;
         _answers = new AnswerStore(Path.Combine(_appDataFolder, "answers"));
-        CurrentPage = new ConnectionViewModel(AppSettings.Load(_appDataFolder), _appDataFolder, OnConnected);
+        _passwords = passwords ?? PasswordStore.ForThisComputer();
+        CurrentPage = new ConnectionViewModel(AppSettings.Load(_appDataFolder), _appDataFolder, OnConnected, _passwords);
     }
 
     /// <summary>Set when the course content couldn't be loaded; the app can't do anything useful then.</summary>
@@ -54,7 +57,7 @@ public partial class MainViewModel : ViewModelBase
     private void ChangeConnection()
     {
         SaveAll();
-        CurrentPage = new ConnectionViewModel(AppSettings.Load(_appDataFolder), _appDataFolder, OnConnected);
+        CurrentPage = new ConnectionViewModel(AppSettings.Load(_appDataFolder), _appDataFolder, OnConnected, _passwords);
     }
 
     private static ContentLibrary? LoadContent(out string? error)

@@ -48,6 +48,13 @@ public partial class WorkspaceView : UserControl
         if (files.Count == 0)
             return;
 
+        // A file on disk is linked, so saving it in another editor updates the answer here.
+        if (files[0].TryGetLocalPath() is { } path)
+        {
+            workspace.OpenFile(path);
+            return;
+        }
+
         await using var stream = await files[0].OpenReadAsync();
         using var reader = new StreamReader(stream);
         workspace.ReplaceAnswer(await reader.ReadToEndAsync());
