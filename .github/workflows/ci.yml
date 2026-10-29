@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# The job names below are the status check names to mark as required in branch protection.
+jobs:
+  build-and-test:
+    name: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build
+        run: dotnet build HomeworkValidator.slnx --configuration Release
+
+      - name: Unit tests
+        run: dotnet test HomeworkValidator.slnx --configuration Release --no-build
+
+  # Builds the validator's databases on a real SQL Server and checks that every reference
+  # solution passes and every known-wrong answer (mutant) fails.
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2025-latest
+        env:
+          ACCEPT_EULA: Y
+          # Throwaway password for this CI-only container.
+          MSSQL_SA_PASSWORD: HvCiPassw0rd2025
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P HvCiPassw0rd2025 -C -b -Q 'SELECT 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+          --health-start-period 20s
+    env:
+      HV_CONNECTION_STRING: Server=localhost,1433;User ID=sa;Password=HvCiPassw0rd2025;TrustServerCertificate=true
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build hv
+        run: dotnet build src/HomeworkValidator.Cli --configuration Release
+
+      - name: Build the validator's databases
+        run: dotnet run --project src/HomeworkValidator.Cli --configuration Release --no-build -- setup
+
+      - name: Verify solutions and mutants
+        run: dotnet run --project src/HomeworkValidator.Cli --configuration Release --no-build -- verify
