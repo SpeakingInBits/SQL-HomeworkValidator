@@ -96,6 +96,39 @@ public sealed class ContentLibraryTests : IDisposable
         Assert.Equal("A hint.", question.Hints["base"]);
     }
 
+    [Theory]
+    [InlineData("", null)]
+    [InlineData("showSolutions: false", null)]
+    [InlineData("showSolutions: true", "0001-01-01")]
+    [InlineData("showSolutions: 2026-12-15", "2026-12-15")]
+    public void Show_solutions_setting_is_parsed(string line, string? from)
+    {
+        Write("assignments/hw1/assignment.yaml", $"title: Homework 1\ndatabase: Shop\n{line}");
+
+        var assignment = ContentLibrary.Load(_root).Assignments.Single();
+
+        Assert.Equal(from is null ? null : DateOnly.Parse(from), assignment.SolutionsFrom);
+    }
+
+    [Fact]
+    public void Show_solutions_must_be_true_false_or_a_date()
+    {
+        Write("assignments/hw1/assignment.yaml", "title: Homework 1\ndatabase: Shop\nshowSolutions: after the due date");
+
+        var ex = Assert.Throws<ContentException>(() => ContentLibrary.Load(_root));
+        Assert.Contains("showSolutions must be true, false or a date", ex.Message);
+    }
+
+    [Fact]
+    public void Solutions_are_shown_from_their_date_on()
+    {
+        var assignment = new Assignment("hw1", "Homework 1", "Shop", []) { SolutionsFrom = new DateOnly(2026, 12, 15) };
+
+        Assert.False(assignment.ShowsSolutions(new DateOnly(2026, 12, 14)));
+        Assert.True(assignment.ShowsSolutions(new DateOnly(2026, 12, 15)));
+        Assert.False(new Assignment("hw1", "Homework 1", "Shop", []).ShowsSolutions(DateOnly.MaxValue));
+    }
+
     [Fact]
     public void Unknown_question_fields_are_rejected()
     {

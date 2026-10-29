@@ -42,7 +42,7 @@ content/
       ...same layout
   assignments/
     ap-hw1/
-      assignment.yaml     # title and database
+      assignment.yaml     # title, database, and when to offer solutions
       q5.yaml             # prompt, compare options, rules, hints
       q5.sql              # reference solution
       q5.mutants/         # known-wrong answers that must fail
@@ -191,7 +191,15 @@ Per-question options:
 
 ## Question format
 
-Each assignment folder has an `assignment.yaml` (`title`, `database`) and one `q<n>.yaml` per question. Question IDs are `<assignment>/q<n>`, e.g. `mgs-hw1/q2`.
+Each assignment folder has an `assignment.yaml` and one `q<n>.yaml` per question. Question IDs are `<assignment>/q<n>`, e.g. `mgs-hw1/q2`.
+
+```yaml
+title: AP Homework 1
+database: AP
+showSolutions: 2026-12-15        # optional: true, false (the default), or the first day to offer "Show solution"
+```
+
+A date lets solutions appear after the due date without a new release. It uses the student's own clock, which is fine since the solutions ship inside the app anyway.
 
 ```yaml
 title: Customer full names, M to Z
@@ -262,7 +270,7 @@ Probe names are shown to the student when a probe behaves differently, so write 
 2. **Setup status:** a bar across the top. The `HV_` databases are built or updated automatically after connecting, with progress shown; a "Set up databases" button retries if that failed.
 3. **Assignments:** a tree of assignments and questions, each marked passed, failed or not checked. Status is saved between sessions.
 4. **Question:** prompt, SQL editor with syntax highlighting (AvaloniaEdit + TextMate), "Open .sql file", and Check (F5 or Ctrl+Enter). Answers are saved automatically. Reloading an opened file when it changes on disk is not done yet.
-5. **Results:** a pass/fail banner, then per dataset: the message, tables of missing rows and rows that shouldn't be there (up to 25 each), and the hint. Also notes (such as an ignored USE), errors and rule violations. Not done yet: showing the student's full result next to the expected one, and a "Show solution" button (an instructor setting per assignment, e.g. after the due date).
+5. **Results:** a pass/fail banner, then per dataset: the message, tables of missing rows and rows that shouldn't be there (up to 25 each), and the hint. Also notes (such as an ignored USE), errors and rule violations. A "Show solution" toggle appears once the assignment's `showSolutions` allows it, and shows the reference solution and any alternatives above the results.
 
 ## Distribution
 
