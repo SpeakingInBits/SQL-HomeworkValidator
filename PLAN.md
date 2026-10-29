@@ -26,6 +26,7 @@ src/
   HomeworkValidator.App/         # Avalonia desktop app (thin layer over Core)
 tests/
   HomeworkValidator.Core.Tests/  # unit tests: comparison, analysis, content
+  HomeworkValidator.App.Tests/   # headless UI tests with screenshots; one end-to-end test against SQL Server
                                  # (CI runs `hv verify` against a real SQL Server for the rest)
 content/
   databases/
@@ -49,14 +50,14 @@ content/
         no-filter.sql
 ```
 
-The desktop app only collects input and shows results; Core does the work. That keeps the logic testable and gives the instructor a command-line tool from the same code. `content/` is embedded in the app at build time.
+The desktop app only collects input and shows results; Core does the work. That keeps the logic testable and gives the instructor a command-line tool from the same code. `content/` is copied next to both executables at build time.
 
 ## Connecting to SQL Server
 
 - **Windows default:** `localhost`, Windows authentication. Offer a list of local instances for named installs such as `localhost\SQLEXPRESS`.
 - **Mac/Linux default:** `localhost,1433`, SQL authentication as `sa`.
 - **Trust server certificate:** on by default. SqlClient encrypts by default, and local installs and the Docker image use self-signed certificates.
-- **Password storage:** the OS keychain (Windows Credential Manager, macOS Keychain, Secret Service on Linux), or not saved.
+- **Password storage:** not saved (milestone 3). Students on Windows use Windows authentication and don't need one; Docker users type the sa password each time. Saving it in the OS keychain (Windows Credential Manager, macOS Keychain, Secret Service on Linux) can come later if that's annoying.
 - **Test connection:** also confirms the login can create databases.
 
 ## Course databases
@@ -198,11 +199,11 @@ The reference solution sits next to it as `q<n>.sql`, and known-wrong answers go
 
 ## Screens
 
-1. **Connection:** server, authentication, test button.
-2. **Setup status:** which `HV_` databases exist and are current; build/rebuild button with progress.
-3. **Assignments:** list of assignments and questions with pass/fail status.
-4. **Question:** prompt, SQL editor (paste, or open a `.sql` file and reload on change), Check button.
-5. **Results:** pass/fail per dataset; side-by-side expected vs. actual with differing rows highlighted; hints; rule violations. Optionally a "Show solution" button (an instructor setting per assignment, e.g. after the due date).
+1. **Connection:** server, authentication, login and password. Connecting also checks that the login can create databases.
+2. **Setup status:** a bar across the top. The `HV_` databases are built or updated automatically after connecting, with progress shown; a "Set up databases" button retries if that failed.
+3. **Assignments:** a tree of assignments and questions, each marked passed, failed or not checked. Status is saved between sessions.
+4. **Question:** prompt, SQL editor with syntax highlighting (AvaloniaEdit + TextMate), "Open .sql file", and Check (F5 or Ctrl+Enter). Answers are saved automatically. Reloading an opened file when it changes on disk is not done yet.
+5. **Results:** a pass/fail banner, then per dataset: the message, tables of missing rows and rows that shouldn't be there (up to 25 each), and the hint. Also notes (such as an ignored USE), errors and rule violations. Not done yet: showing the student's full result next to the expected one, and a "Show solution" button (an instructor setting per assignment, e.g. after the due date).
 
 ## Distribution
 
@@ -214,7 +215,7 @@ The reference solution sits next to it as `q<n>.sql`, and known-wrong answers go
 
 1. **Core + CLI, SELECT only** (done): split both course scripts into schema and base data, build `HV_` databases, run a student query and the reference solution, compare, report. Question format, `hv verify` with mutants, and the first homework for each database (`ap-hw1`, `mgs-hw1`).
 2. **Edge and shifted datasets** (done) for both databases. `hv verify` passes: all 43 mutants for `ap-hw1` and `mgs-hw1` are caught, including the four the base data couldn't catch. CI (GitHub Actions, added in its own PR) builds, runs the unit tests and runs `hv verify` against SQL Server in a container.
-3. **Avalonia app for SELECT:** connection dialog, setup status, question list, editor, results with differences.
+3. **Avalonia app for SELECT** (done): connection page, automatic database setup, question tree with saved status, SQL editor with saved answers, and results with differences and hints. Avalonia 12.
 4. **DML questions:** throwaway databases, table-state comparison.
 5. **DDL questions:** rename step, schema comparison, behavior tests.
 6. **Packaging:** builds per platform, signing, install instructions for students.

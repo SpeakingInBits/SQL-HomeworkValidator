@@ -19,9 +19,10 @@ public sealed record ComparisonResult(bool Passed, string Message, RowSample? Mi
 /// </summary>
 public static class ResultComparer
 {
-    public const int SampleSize = 5;
+    public const int DefaultSampleSize = 5;
 
-    public static ComparisonResult Compare(ResultTable expected, ResultTable actual, CompareOptions options)
+    /// <param name="sampleSize">How many missing and unexpected rows to include for display.</param>
+    public static ComparisonResult Compare(ResultTable expected, ResultTable actual, CompareOptions options, int sampleSize = DefaultSampleSize)
     {
         if (options.Columns == ColumnMatch.RowCount)
         {
@@ -49,8 +50,8 @@ public static class ResultComparer
                 parts.Add($"{Rows(unexpected.Count)} in your result {(unexpected.Count == 1 ? "isn't" : "aren't")} in the expected result.");
 
             return new ComparisonResult(false, string.Join(" ", parts),
-                Missing: missing.Count > 0 ? Sample(expected.Columns, missing) : null,
-                Unexpected: unexpected.Count > 0 ? Sample(expected.Columns, unexpected) : null);
+                Missing: missing.Count > 0 ? Sample(expected.Columns, missing, sampleSize) : null,
+                Unexpected: unexpected.Count > 0 ? Sample(expected.Columns, unexpected, sampleSize) : null);
         }
 
         return options.Ordered ? CompareOrder(expected.Columns, expectedRows, actualRows, options.Order) : ComparisonResult.Pass;
@@ -171,8 +172,8 @@ public static class ResultComparer
 
     private static string RowKey(string[] row) => string.Join('\u001F', row);
 
-    private static RowSample Sample(IReadOnlyList<string> columns, List<string[]> rows) =>
-        new(columns, rows.Take(SampleSize).Select(r => (IReadOnlyList<string>)r.Select(Display).ToList()).ToList(), rows.Count);
+    private static RowSample Sample(IReadOnlyList<string> columns, List<string[]> rows, int sampleSize) =>
+        new(columns, rows.Take(sampleSize).Select(r => (IReadOnlyList<string>)r.Select(Display).ToList()).ToList(), rows.Count);
 
     private static string Display(string cell) => cell == NullKey ? "NULL" : cell;
 

@@ -1,0 +1,114 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HomeworkValidator.App.ViewModels"
+             xmlns:views="using:HomeworkValidator.App.Views"
+             xmlns:ae="using:AvaloniaEdit"
+             x:Class="HomeworkValidator.App.Views.WorkspaceView"
+             x:DataType="vm:WorkspaceViewModel">
+
+    <!-- F5 checks the answer, like Execute in SSMS. -->
+    <UserControl.KeyBindings>
+        <KeyBinding Gesture="F5" Command="{Binding CheckCommand}" />
+        <KeyBinding Gesture="Ctrl+Enter" Command="{Binding CheckCommand}" />
+    </UserControl.KeyBindings>
+
+    <UserControl.Styles>
+        <!-- Assignments start expanded. Questions have no children, so this only affects assignments. -->
+        <Style Selector="TreeViewItem">
+            <Setter Property="IsExpanded" Value="True" />
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,Auto,*">
+
+        <!-- Top bar: server, database status, actions -->
+        <Border Grid.Row="0" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}"
+                BorderThickness="0,0,0,1" Padding="16,8">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="12">
+                <TextBlock Grid.Column="0" Classes="muted" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           Text="{Binding ServerDescription}" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <ProgressBar IsIndeterminate="True" Width="80" IsVisible="{Binding IsBusy}" />
+                    <TextBlock Text="{Binding Status}" VerticalAlignment="Center" />
+                </StackPanel>
+                <Button Grid.Column="2" Content="Set up databases" Command="{Binding SetUpDatabasesCommand}"
+                        IsVisible="{Binding !DatabasesReady}" />
+                <Button Grid.Column="3" Content="Change connection" Command="{Binding ChangeConnectionCommand}" />
+            </Grid>
+        </Border>
+
+        <!-- Problems that aren't about the student's answer -->
+        <Border Grid.Row="1" Classes="banner fail" Margin="16,8,16,0"
+                IsVisible="{Binding Problem, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <SelectableTextBlock Text="{Binding Problem}" TextWrapping="Wrap" />
+        </Border>
+
+        <Grid Grid.Row="2" ColumnDefinitions="310,Auto,*">
+
+            <!-- Assignments and questions -->
+            <TreeView Grid.Column="0" ItemsSource="{Binding Assignments}" SelectedItem="{Binding SelectedNode}" Margin="4,8">
+                <TreeView.DataTemplates>
+                    <TreeDataTemplate DataType="vm:AssignmentViewModel" ItemsSource="{Binding Questions}">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                    </TreeDataTemplate>
+                    <DataTemplate DataType="vm:QuestionViewModel">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="{Binding StatusGlyph}" Width="12" FontWeight="Bold"
+                                       Classes.pass="{Binding IsPassed}" Classes.fail="{Binding IsFailed}" />
+                            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </DataTemplate>
+                </TreeView.DataTemplates>
+            </TreeView>
+
+            <GridSplitter Grid.Column="1" Width="1" Background="{DynamicResource DividerBrush}" ResizeDirection="Columns" />
+
+            <TextBlock Grid.Column="2" Classes="muted" Text="Choose a question on the left."
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       IsVisible="{Binding SelectedQuestion, Converter={x:Static ObjectConverters.IsNull}}" />
+
+            <!-- The selected question -->
+            <Grid Grid.Column="2" RowDefinitions="Auto,Auto,Auto,2*,Auto,3*" Margin="16,12,16,0"
+                  IsVisible="{Binding SelectedQuestion, Converter={x:Static ObjectConverters.IsNotNull}}">
+
+                <StackPanel Grid.Row="0" Spacing="2">
+                    <TextBlock Classes="title" Text="{Binding SelectedQuestion.Heading}" TextWrapping="Wrap" />
+                    <TextBlock Classes="muted" Text="{Binding SelectedQuestion.Details}" />
+                </StackPanel>
+
+                <Border Grid.Row="1" Margin="0,10,0,0" Padding="12,8" CornerRadius="6"
+                        Background="{DynamicResource PanelBrush}">
+                    <ScrollViewer MaxHeight="200">
+                        <SelectableTextBlock Text="{Binding SelectedQuestion.Question.Prompt}" TextWrapping="Wrap"
+                                             FontFamily="{StaticResource CodeFont}" FontSize="13" />
+                    </ScrollViewer>
+                </Border>
+
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" Margin="0,10,0,6">
+                    <Button Classes="accent" Content="Check (F5)" Command="{Binding CheckCommand}" />
+                    <Button Content="Open .sql file..." Click="OpenFile_Click" />
+                    <TextBlock Classes="muted" VerticalAlignment="Center" FontSize="12"
+                               Text="Your answer is saved automatically." />
+                </StackPanel>
+
+                <Border Grid.Row="3" BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1" CornerRadius="4">
+                    <ae:TextEditor x:Name="Editor" Document="{Binding SelectedQuestion.Document}"
+                                   ShowLineNumbers="True" FontFamily="{StaticResource CodeFont}" FontSize="14"
+                                   HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" />
+                </Border>
+
+                <GridSplitter Grid.Row="4" Height="6" Background="Transparent" ResizeDirection="Rows" />
+
+                <ScrollViewer Grid.Row="5" Padding="0,0,0,16">
+                    <Panel>
+                        <TextBlock Classes="muted" Text="Write your query above, then click Check (F5)."
+                                   IsVisible="{Binding SelectedQuestion.Result, Converter={x:Static ObjectConverters.IsNull}}" />
+                        <!-- Bindings on this element see the ResultViewModel, so IsVisible looks at its own DataContext. -->
+                        <views:ResultView DataContext="{Binding SelectedQuestion.Result}"
+                                          IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    </Panel>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

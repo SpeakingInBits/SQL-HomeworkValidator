@@ -1,0 +1,31 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:HomeworkValidator.App.ViewModels"
+        xmlns:views="using:HomeworkValidator.App.Views"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+        x:Class="HomeworkValidator.App.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="SQL Homework Validator"
+        Width="1200" Height="800" MinWidth="800" MinHeight="560"
+        WindowStartupLocation="CenterScreen">
+
+    <!-- Which view to show for each page view model. ContentControl below picks the matching template. -->
+    <Window.DataTemplates>
+        <DataTemplate DataType="vm:ConnectionViewModel">
+            <views:ConnectionView />
+        </DataTemplate>
+        <DataTemplate DataType="vm:WorkspaceViewModel">
+            <views:WorkspaceView />
+        </DataTemplate>
+    </Window.DataTemplates>
+
+    <Panel>
+        <ContentControl Content="{Binding CurrentPage}" IsVisible="{Binding ContentError, Converter={x:Static ObjectConverters.IsNull}}" />
+        <TextBlock Text="{Binding ContentError}"
+                   IsVisible="{Binding ContentError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   Classes="fail" TextWrapping="Wrap" Margin="32" />
+    </Panel>
+</Window>

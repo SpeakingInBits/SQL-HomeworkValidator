@@ -34,6 +34,9 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, Q
 {
     private readonly Dictionary<(string Question, string Dataset), ResultTable> _expected = [];
 
+    /// <summary>How many missing and unexpected rows each dataset result includes for display.</summary>
+    public int SampleSize { get; init; } = ResultComparer.DefaultSampleSize;
+
     public async Task<CheckReport> CheckAsync(Question question, string studentSql, CancellationToken ct = default)
     {
         var analysis = ScriptAnalyzer.AnalyzeSelect(studentSql);
@@ -67,7 +70,7 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, Q
             ComparisonResult comparison;
             try
             {
-                comparison = ResultComparer.Compare(expected, actual, question.Compare);
+                comparison = ResultComparer.Compare(expected, actual, question.Compare, SampleSize);
             }
             catch (ContentException ex)
             {
