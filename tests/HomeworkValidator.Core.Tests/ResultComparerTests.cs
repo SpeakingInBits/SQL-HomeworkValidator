@@ -9,6 +9,20 @@ public class ResultComparerTests
 {
     private static ResultTable Table(string[] columns, params object?[][] rows) => new(columns, rows);
 
+    [Fact]
+    public void Whole_results_keep_their_order_and_are_formatted_for_display()
+    {
+        var table = Table(["Name", "Price"], ["Zed", 10.50m], ["Amy", null], ["Bo", 3.14159m]);
+
+        var rows = ResultComparer.Rows(table, maxRows: 2, decimals: 2);
+
+        Assert.Equal(["Name", "Price"], rows.Columns);
+        Assert.Equal(3, rows.Total);
+        Assert.Equal(2, rows.Rows.Count);
+        Assert.Equal(["Zed", "10.5"], rows.Rows[0]);
+        Assert.Equal(["Amy", "NULL"], rows.Rows[1]);
+    }
+
     private static CompareOptions Unordered => CompareOptions.Default;
 
     private static CompareOptions OrderedBy(params string[] columns) =>

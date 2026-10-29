@@ -13,8 +13,9 @@ public static class StateComparer
     /// <summary>Stands in for any non-NULL value in a presence-only column.</summary>
     private const string SetMarker = "(set)";
 
+    /// <param name="fullRows">When above 0, the first table that differs also comes back whole (up to this many rows), both ways.</param>
     public static ComparisonResult Compare(DatabaseSnapshot expected, DatabaseSnapshot actual, CompareOptions options,
-        int sampleSize = ResultComparer.DefaultSampleSize)
+        int sampleSize = ResultComparer.DefaultSampleSize, int fullRows = 0)
     {
         var missingTables = expected.Tables.Keys.Where(t => !actual.Tables.ContainsKey(t)).Order().ToList();
         if (missingTables.Count > 0)
@@ -49,6 +50,14 @@ public static class StateComparer
         var first = failures[0];
         if (failures.Count > 1)
             first = first with { Message = $"{first.Message} Also different: {Names(failures.Skip(1).Select(f => f.Table!).ToList())}." };
+        if (fullRows > 0)
+        {
+            first = first with
+            {
+                Expected = ResultComparer.Rows(expected.Tables[first.Table!], fullRows, options.Decimals),
+                Actual = ResultComparer.Rows(actual.Tables[first.Table!], fullRows, options.Decimals),
+            };
+        }
         return first;
     }
 

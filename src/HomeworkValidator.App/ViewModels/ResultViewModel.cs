@@ -81,6 +81,15 @@ public class DatasetResultViewModel(DatasetResult result, bool isScript = false)
     public string? MissingHeading => Missing is null ? null : Heading(Table is null ? "Missing from your result" : $"Missing from {Table}", Missing);
     public string? UnexpectedHeading => Unexpected is null ? null : Heading(Table is null ? "In your result but not expected" : $"In {Table} but not expected", Unexpected);
 
+    /// <summary>The student's whole result and the expected one, shown side by side. For scripts, the first table that differs.</summary>
+    public RowSample? Actual => result.Comparison?.Actual;
+    public RowSample? Expected => result.Comparison?.Expected;
+    public bool HasFullResults => Actual is not null && Expected is not null;
+
+    public string FullResultsHeader => Table is null ? "Show your whole result next to the expected one" : $"Show all of {Table} next to the expected rows";
+    public string? ActualHeading => Actual is null ? null : Heading(Table is null ? "Your result" : $"{Table} after your script", Actual);
+    public string? ExpectedHeading => Expected is null ? null : Heading(Table is null ? "Expected result" : $"Expected {Table}", Expected);
+
     /// <summary>For DML questions, the table the rows come from.</summary>
     private string? Table => result.Comparison?.Table;
 

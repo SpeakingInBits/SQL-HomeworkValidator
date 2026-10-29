@@ -74,6 +74,21 @@
                                 IsVisible="{Binding Hint, Converter={x:Static ObjectConverters.IsNotNull}}">
                             <TextBlock Text="{Binding Hint, StringFormat='Hint: {0}'}" TextWrapping="Wrap" />
                         </Border>
+
+                        <!-- Everything the student's SQL produced, next to what was expected, in the order each came back -->
+                        <Expander Margin="58,4,0,0" HorizontalAlignment="Stretch" Header="{Binding FullResultsHeader}"
+                                  IsVisible="{Binding HasFullResults}">
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+                                <StackPanel Grid.Column="0" Spacing="4">
+                                    <TextBlock Classes="muted" Text="{Binding ActualHeading}" />
+                                    <controls:ResultGrid Sample="{Binding Actual}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Spacing="4">
+                                    <TextBlock Classes="muted" Text="{Binding ExpectedHeading}" />
+                                    <controls:ResultGrid Sample="{Binding Expected}" />
+                                </StackPanel>
+                            </Grid>
+                        </Expander>
                     </StackPanel>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>

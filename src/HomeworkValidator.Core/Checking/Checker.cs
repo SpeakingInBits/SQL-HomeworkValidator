@@ -42,6 +42,12 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, S
     /// <summary>How many missing and unexpected rows each dataset result includes for display.</summary>
     public int SampleSize { get; init; } = ResultComparer.DefaultSampleSize;
 
+    /// <summary>
+    /// When above 0, results also include the student's whole result and the expected one (up to this many rows each),
+    /// for SELECT questions, and the first table that differs for scripts.
+    /// </summary>
+    public int FullResultRows { get; init; }
+
     public async Task<CheckReport> CheckAsync(Question question, string studentSql, CancellationToken ct = default)
     {
         var analysis = ScriptAnalyzer.Analyze(studentSql, question.Kind, question.Database);
@@ -94,6 +100,15 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, S
             });
 
             var comparison = Compare(question, () => ResultComparer.Compare(expected, actual, question.Compare, SampleSize));
+            if (FullResultRows > 0)
+            {
+                comparison = comparison with
+                {
+                    Expected = ResultComparer.Rows(expected, FullResultRows, question.Compare.Decimals),
+                    Actual = ResultComparer.Rows(actual, FullResultRows, question.Compare.Decimals),
+                };
+            }
+
             if (comparison.Passed)
                 return comparison;
             first ??= comparison;
@@ -169,7 +184,7 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, S
                 return probes;
         }
 
-        var data = StateComparer.Compare(expected.Snapshot, actual.Snapshot, question.Compare, SampleSize);
+        var data = StateComparer.Compare(expected.Snapshot, actual.Snapshot, question.Compare, SampleSize, FullResultRows);
         return data.Passed && question.Kind == QuestionKind.Ddl
             ? new ComparisonResult(true, "The design and its behavior match the expected ones.")
             : data;
