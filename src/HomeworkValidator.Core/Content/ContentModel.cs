@@ -10,7 +10,8 @@ public sealed record CourseDatabase(string Name, string SchemaSql, IReadOnlyList
         ?? throw new ContentException($"Database '{Name}' has no dataset named '{name}'.");
 }
 
-public sealed record Dataset(string Name, string Sql);
+/// <param name="Hint">Shown when a check fails on this dataset and the question has no hint of its own.</param>
+public sealed record Dataset(string Name, string Sql, string? Hint = null);
 
 public sealed record Assignment(string Id, string Title, string Database, IReadOnlyList<Question> Questions);
 

@@ -1,0 +1,7 @@
+# Default hints, shown when a check fails on a dataset and the question has no hint of its own.
+edge: >-
+  The edge data adds rows that catch common mistakes: values exactly on a boundary, NULLs,
+  ties when sorting, and rows with no matching rows in another table.
+shifted: >-
+  The shifted data has different ID values, in reverse order. Make sure your query doesn't
+  depend on specific IDs, or on rows coming back in a particular order without ORDER BY.

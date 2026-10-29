@@ -11,7 +11,7 @@ Requires the .NET 10 SDK and a SQL Server you can create databases on.
 ```bash
 dotnet build
 cd src/HomeworkValidator.Cli/bin/Debug/net10.0
-./hv setup                              # creates HV_AP_base and HV_MyGuitarShop_base
+./hv setup                              # creates HV_AP_base, HV_AP_edge, HV_AP_shifted and the same for MyGuitarShop
 ./hv list                               # assignments and question IDs
 ./hv show ap-hw1/q2                     # print a question
 ./hv check ap-hw1/q2 my-answer.sql      # check an answer
@@ -25,4 +25,10 @@ The validator only creates and drops databases whose names start with `HV_` and 
 
 ## Adding questions
 
-Questions live in `content/assignments/<assignment>/`. See "Question format" in [PLAN.md](PLAN.md). After adding or changing one, run `hv verify <assignment>`.
+Questions live in `content/assignments/<assignment>/`. See "Question format" in [PLAN.md](PLAN.md). After adding or changing one, run `hv verify <assignment>`. If one of your known-wrong answers passes, add rows to the database's `datasets/edge.sql` that tell it apart.
+
+If you change a database's `datasets/base.sql`, regenerate its shifted dataset from the repository root:
+
+```bash
+dotnet run --project src/HomeworkValidator.Cli -- make-shifted AP
+```

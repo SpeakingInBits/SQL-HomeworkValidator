@@ -104,6 +104,18 @@ public static class Commands
         return 0;
     }
 
+    public static int MakeShifted(ContentLibrary content, string databaseName, ConsoleOutput output)
+    {
+        var database = content.GetDatabase(databaseName);
+        var datasetsDir = Path.Combine(content.Root, "databases", database.Name, "datasets");
+        var basePath = Path.Combine(datasetsDir, "base.sql");
+        var shiftedPath = Path.Combine(datasetsDir, "shifted.sql");
+
+        File.WriteAllText(shiftedPath, ShiftedDatasetGenerator.Generate(File.ReadAllText(basePath), database.Name));
+        output.Line($"Wrote {Path.GetFullPath(shiftedPath)}");
+        return 0;
+    }
+
     private static void PrintReport(CheckReport report, ConsoleOutput output)
     {
         output.Line($"{report.Question.Id}: {report.Question.Title}");

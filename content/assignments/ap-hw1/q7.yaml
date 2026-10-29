@@ -10,3 +10,5 @@ compare:
   columns: row-count
 rules:
   require: [Where]
+hints:
+  edge: The edge data has both kinds of invalid row, and an invoice paid entirely by a credit. Remember that credits reduce the balance due too.

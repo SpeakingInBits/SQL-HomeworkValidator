@@ -51,7 +51,7 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, Q
             var dbName = DatabaseManager.DatabaseName(database, dataset);
 
             var expected = await GetExpectedAsync(question, dbName, dataset, ct);
-            question.Hints.TryGetValue(dataset.Name, out var hint);
+            var hint = question.Hints.GetValueOrDefault(dataset.Name) ?? dataset.Hint;
 
             ResultTable actual;
             try
