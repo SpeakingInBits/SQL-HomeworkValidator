@@ -16,6 +16,9 @@ public partial class WorkspaceViewModel : ViewModelBase
     /// <summary>Rows of each kind to show when a result doesn't match. The command line shows 5; the app has room for more.</summary>
     private const int SampleSize = 25;
 
+    /// <summary>Rows of the whole result to show next to the expected one. More would make the results slow to build.</summary>
+    private const int FullResultRows = 100;
+
     private readonly ContentLibrary _content;
     private readonly DatabaseManager _databases;
     private readonly Checker _checker;
@@ -29,7 +32,7 @@ public partial class WorkspaceViewModel : ViewModelBase
         _answers = answers;
         _changeConnection = changeConnection;
         _databases = new DatabaseManager(server);
-        _checker = new Checker(content, _databases, server) { SampleSize = SampleSize };
+        _checker = new Checker(content, _databases, server) { SampleSize = SampleSize, FullResultRows = FullResultRows };
 
         ServerDescription = $"{server.Server} · SQL Server {info.Version} {info.Edition}";
         Assignments = new ObservableCollection<AssignmentViewModel>(

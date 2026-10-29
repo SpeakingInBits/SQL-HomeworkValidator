@@ -35,6 +35,21 @@ public class StateComparerTests
     }
 
     [Fact]
+    public void The_first_differing_table_comes_back_whole_when_asked()
+    {
+        var expected = Snapshot(("Categories", Categories([1, "Guitars"], [5, "Brass"])));
+        var actual = Snapshot(("Categories", Categories([1, "Guitars"], [5, "brass instruments"], [6, null])));
+
+        var result = StateComparer.Compare(expected, actual, CompareOptions.Default, fullRows: 10);
+
+        Assert.Equal(["CategoryID", "CategoryName"], result.Actual!.Columns);
+        Assert.Equal(3, result.Actual.Total);
+        Assert.Equal(["6", "NULL"], result.Actual.Rows[2]);
+        Assert.Equal(2, result.Expected!.Total);
+        Assert.Null(StateComparer.Compare(expected, actual, CompareOptions.Default).Actual);
+    }
+
+    [Fact]
     public void A_missing_table_is_reported()
     {
         var expected = Snapshot(("VendorCopy", Categories()), ("InvoiceCopy", Categories()));

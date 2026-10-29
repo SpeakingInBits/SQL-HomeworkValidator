@@ -71,6 +71,41 @@ public class WindowTests
         Assert.Contains(window.GetLogicalDescendants().OfType<ResultGrid>(), t => t.IsEffectivelyVisible);
     }
 
+    [AvaloniaFact]
+    public void Whole_results_are_shown_side_by_side_when_expanded()
+    {
+        var question = Content.GetQuestion("mgs-hw1/q3");
+        var columns = new[] { "ProductName", "ListPrice", "DateAdded" };
+        var actual = new RowSample(columns,
+        [
+            ["Edge Bass 2000", "2000", "2016-08-02 10:00:00"],
+            ["Edge Guitar 500", "500", "2016-08-01 10:00:00"],
+            ["Gibson SG", "1208.42", "2016-02-05 11:04:31"],
+        ], 3);
+        var expected = new RowSample(columns, [["Gibson SG", "1208.42", "2016-02-05 11:04:31"]], 1);
+        var report = new CheckReport(question, [], [], [],
+        [
+            new DatasetResult("edge", DatasetOutcome.Failed, "Expected 1 row, but your query returned 3 rows.",
+                new ComparisonResult(false, "", Unexpected: new RowSample(columns, actual.Rows.Take(2).ToList(), 2))
+                    { Actual = actual, Expected = expected },
+                null),
+        ]);
+
+        var window = new Window { Content = new ResultView { DataContext = new ResultViewModel(report) }, Width = 1100, Height = 600 };
+        window.Show();
+        var expander = window.GetVisualDescendants().OfType<Expander>().Single();
+        Assert.True(expander.IsEffectivelyVisible);
+        Assert.Equal("Show your whole result next to the expected one", expander.Header);
+
+        expander.IsExpanded = true;
+        window.UpdateLayout();
+        TestAppBuilder.SaveScreenshot(window, "result-full-side-by-side");
+
+        var texts = VisibleTexts(window).ToList();
+        Assert.Contains("Your result (3)", texts);
+        Assert.Contains("Expected result (1)", texts);
+    }
+
     private static CheckReport FailedReport(Question question)
     {
         var columns = new[] { "ProductName", "ListPrice", "DateAdded" };

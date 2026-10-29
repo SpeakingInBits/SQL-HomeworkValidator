@@ -14,6 +14,12 @@ public sealed record ComparisonResult(bool Passed, string Message, RowSample? Mi
 
     /// <summary>For DML questions, the table the rows belong to; null for a query's result.</summary>
     public string? Table { get; init; }
+
+    /// <summary>The whole expected result (or table), in its own order, when the checker was asked for it.</summary>
+    public RowSample? Expected { get; init; }
+
+    /// <summary>The whole result the student's SQL produced (or the table after their script), as they returned it.</summary>
+    public RowSample? Actual { get; init; }
 }
 
 /// <summary>
@@ -197,6 +203,15 @@ public static class ResultComparer
     private const string NullKey = "\u0000";
 
     private static string RowKey(string[] row) => string.Join('\u001F', row);
+
+    /// <summary>
+    /// A whole result for display, in its own column and row order, formatted the way it's compared.
+    /// Only the first <paramref name="maxRows"/> rows are included.
+    /// </summary>
+    public static RowSample Rows(ResultTable table, int maxRows, int? decimals = null) =>
+        new(table.Columns,
+            table.Rows.Take(maxRows).Select(r => (IReadOnlyList<string>)r.Select(v => Display(Format(v, decimals))).ToList()).ToList(),
+            table.Rows.Count);
 
     private static RowSample Sample(IReadOnlyList<string> columns, List<string[]> rows, int sampleSize) =>
         new(columns, rows.Take(sampleSize).Select(r => (IReadOnlyList<string>)r.Select(Display).ToList()).ToList(), rows.Count);
