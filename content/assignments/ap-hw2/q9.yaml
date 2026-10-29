@@ -1,0 +1,12 @@
+title: Delete vendors in states with no invoices
+kind: dml
+after: [q1]
+prompt: |
+  Write a DELETE statement for the VendorCopy table. Delete the vendors that are
+  located in states from which no vendor has ever sent an invoice.
+
+  Hint: Use a subquery coded with "SELECT DISTINCT VendorState" introduced with the
+  NOT IN operator. The subquery itself should return a list of states that DO have
+  invoices. Then the outer query will delete Vendors not in those states.
+rules:
+  require: [Subquery]

@@ -11,7 +11,7 @@ namespace HomeworkValidator.Core.Content;
 /// databases/&lt;Name&gt;/schema.sql
 /// databases/&lt;Name&gt;/datasets/&lt;dataset&gt;.sql
 /// assignments/&lt;id&gt;/assignment.yaml
-/// assignments/&lt;id&gt;/q&lt;n&gt;.yaml, q&lt;n&gt;.sql, q&lt;n&gt;.mutants/*.sql
+/// assignments/&lt;id&gt;/q&lt;n&gt;.yaml, q&lt;n&gt;.sql, q&lt;n&gt;.mutants/*.sql, q&lt;n&gt;.alternatives/*.sql, q&lt;n&gt;.setup.sql
 /// </code>
 /// </summary>
 public sealed partial class ContentLibrary
@@ -153,7 +153,9 @@ public sealed partial class ContentLibrary
                 .Select(x => LoadQuestion(x.path, x.number, id, database))
                 .ToList();
 
-            result.Add(new Assignment(id, Required(manifest.Title, manifestPath, "title"), database.Name, questions));
+            var assignment = new Assignment(id, Required(manifest.Title, manifestPath, "title"), database.Name, questions);
+            CheckAfterReferences(assignment, assignmentDir);
+            result.Add(assignment);
         }
 
         return result;
@@ -168,13 +170,17 @@ public sealed partial class ContentLibrary
         if (!File.Exists(solutionPath))
             throw new ContentException($"{path}: reference solution {Path.GetFileName(solutionPath)} is missing.");
 
-        var mutantsDir = stem + ".mutants";
-        var mutants = Directory.Exists(mutantsDir)
-            ? Directory.GetFiles(mutantsDir, "*.sql")
-                .Order(StringComparer.OrdinalIgnoreCase)
-                .Select(p => new Mutant(Path.GetFileNameWithoutExtension(p), File.ReadAllText(p)))
-                .ToList()
-            : [];
+        var kind = ParseEnum<QuestionKind>(yaml.Kind ?? "select", path, "kind");
+        if (kind != QuestionKind.Dml && (yaml.After is not null || File.Exists(stem + ".setup.sql")))
+            throw new ContentException($"{path}: 'after' and setup scripts are only for kind: dml questions.");
+
+        var after = (yaml.After ?? []).Select(name =>
+        {
+            var match = QuestionFileName().Match(name);
+            if (!match.Success || int.Parse(match.Groups[1].Value) >= number)
+                throw new ContentException($"{path}: 'after' lists '{name}'; it must name an earlier question in this assignment, like q1.");
+            return $"{assignmentId}/q{int.Parse(match.Groups[1].Value)}";
+        }).ToList();
 
         var datasets = yaml.Datasets ?? database.Datasets.Select(d => d.Name).ToList();
         foreach (var ds in datasets)
@@ -190,22 +196,59 @@ public sealed partial class ContentLibrary
             Number: number,
             Title: Required(yaml.Title, path, "title"),
             Prompt: Required(yaml.Prompt, path, "prompt").Trim(),
-            Kind: ParseEnum<QuestionKind>(yaml.Kind ?? "select", path, "kind"),
+            Kind: kind,
             Database: database.Name,
             Datasets: datasets,
-            Compare: ParseCompare(yaml.Compare, path),
+            Compare: ParseCompare(yaml.Compare, kind, path),
             Rules: new QuestionRules(
                 ParseFeatures(yaml.Rules?.Require, path),
                 ParseFeatures(yaml.Rules?.Forbid, path)),
             Hints: new Dictionary<string, string>(hints, StringComparer.OrdinalIgnoreCase),
             SolutionSql: File.ReadAllText(solutionPath),
-            Mutants: mutants);
+            Mutants: ReadScripts(stem + ".mutants"))
+        {
+            Note = yaml.Note?.Trim(),
+            Alternatives = ReadScripts(stem + ".alternatives"),
+            After = after,
+            SetupSql = File.Exists(stem + ".setup.sql") ? File.ReadAllText(stem + ".setup.sql") : null,
+        };
     }
 
-    private static CompareOptions ParseCompare(CompareYaml? yaml, string path)
+    /// <summary>Every .sql file in a folder such as q5.mutants/ or q5.alternatives/, named by file name.</summary>
+    private static List<NamedScript> ReadScripts(string dir) =>
+        Directory.Exists(dir)
+            ? Directory.GetFiles(dir, "*.sql")
+                .Order(StringComparer.OrdinalIgnoreCase)
+                .Select(p => new NamedScript(Path.GetFileNameWithoutExtension(p), File.ReadAllText(p)))
+                .ToList()
+            : [];
+
+    /// <summary>A question's 'after' list must name DML questions, since their solutions set up its starting state.</summary>
+    private static void CheckAfterReferences(Assignment assignment, string dir)
+    {
+        foreach (var question in assignment.Questions)
+        {
+            foreach (var id in question.After)
+            {
+                var earlier = assignment.Questions.FirstOrDefault(q => q.Id == id)
+                    ?? throw new ContentException($"{dir}: {question.Id} runs after {id}, which doesn't exist.");
+                if (earlier.Kind != QuestionKind.Dml)
+                    throw new ContentException($"{dir}: {question.Id} runs after {id}, which isn't a kind: dml question.");
+            }
+        }
+    }
+
+    private static CompareOptions ParseCompare(CompareYaml? yaml, QuestionKind kind, string path)
     {
         if (yaml is null)
             return CompareOptions.Default;
+
+        if (kind == QuestionKind.Dml && (yaml.Columns is not null || yaml.Order is not null))
+            throw new ContentException($"{path}: DML questions compare whole tables, so compare.columns and compare.order don't apply.");
+        if (kind != QuestionKind.Dml && yaml.PresenceOnly is not null)
+            throw new ContentException($"{path}: compare.presenceOnly is only for kind: dml questions.");
+        foreach (var name in (yaml.PresenceOnly ?? []).Where(n => n.Split('.').Length != 2))
+            throw new ContentException($"{path}: compare.presenceOnly entries look like Table.Column, not '{name}'.");
 
         var columns = yaml.Columns switch
         {
@@ -239,7 +282,7 @@ public sealed partial class ContentLibrary
         if (columns == ColumnMatch.RowCount && order.Count > 0)
             throw new ContentException($"{path}: compare.order can't be used with columns: row-count.");
 
-        return new CompareOptions(columns, order, yaml.Decimals);
+        return new CompareOptions(columns, order, yaml.Decimals) { PresenceOnly = yaml.PresenceOnly ?? [] };
     }
 
     private static HashSet<SqlFeature> ParseFeatures(List<string>? names, string path) =>
@@ -300,6 +343,8 @@ public sealed partial class ContentLibrary
         public CompareYaml? Compare { get; set; }
         public RulesYaml? Rules { get; set; }
         public Dictionary<string, string>? Hints { get; set; }
+        public string? Note { get; set; }
+        public List<string>? After { get; set; }
     }
 
     private sealed class CompareYaml
@@ -307,6 +352,7 @@ public sealed partial class ContentLibrary
         public string? Columns { get; set; }
         public List<object>? Order { get; set; }
         public int? Decimals { get; set; }
+        public List<string>? PresenceOnly { get; set; }
     }
 
     private sealed class RulesYaml

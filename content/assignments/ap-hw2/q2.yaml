@@ -1,0 +1,16 @@
+title: Add an invoice to InvoiceCopy
+kind: dml
+after: [q1]
+prompt: |
+  Write an INSERT statement that adds a row to the InvoiceCopy table with the
+  following values:
+
+    VendorID:        32
+    InvoiceTotal:    $434.58
+    TermsID:         2
+    InvoiceNumber:   AX-014-027
+    PaymentTotal:    $0.00
+    InvoiceDueDate:  07/8/16
+    InvoiceDate:     06/21/16
+    CreditTotal:     $0.00
+    PaymentDate:     null

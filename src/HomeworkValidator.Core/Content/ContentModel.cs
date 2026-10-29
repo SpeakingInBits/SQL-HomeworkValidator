@@ -17,7 +17,11 @@ public sealed record Assignment(string Id, string Title, string Database, IReadO
 
 public enum QuestionKind
 {
+    /// <summary>A single query; its result set is compared.</summary>
     Select,
+
+    /// <summary>A script that changes data (INSERT, UPDATE, DELETE, SELECT INTO, DROP TABLE); the resulting tables are compared.</summary>
+    Dml,
 }
 
 public sealed record Question(
@@ -33,10 +37,23 @@ public sealed record Question(
     QuestionRules Rules,
     IReadOnlyDictionary<string, string> Hints,
     string SolutionSql,
-    IReadOnlyList<Mutant> Mutants);
+    IReadOnlyList<NamedScript> Mutants)
+{
+    /// <summary>Shown under the prompt, e.g. which ID an earlier exercise's row gets in the validator's copy.</summary>
+    public string? Note { get; init; }
 
-/// <summary>A known-wrong answer that must fail; used by <c>hv verify</c> to show whether the datasets are strong enough.</summary>
-public sealed record Mutant(string Name, string Sql);
+    /// <summary>Other correct answers, for questions that can reasonably be read more than one way.</summary>
+    public IReadOnlyList<NamedScript> Alternatives { get; init; } = [];
+
+    /// <summary>DML only: IDs of earlier questions whose reference solutions run first, e.g. the one that creates VendorCopy.</summary>
+    public IReadOnlyList<string> After { get; init; } = [];
+
+    /// <summary>DML only: SQL that runs after <see cref="After"/> and before the answer (q&lt;n&gt;.setup.sql).</summary>
+    public string? SetupSql { get; init; }
+}
+
+/// <summary>A named script: a known-wrong answer (mutant) or an alternative correct answer.</summary>
+public sealed record NamedScript(string Name, string Sql);
 
 public enum ColumnMatch
 {
@@ -57,9 +74,15 @@ public enum ColumnMatch
 /// </summary>
 public sealed record OrderKey(string Column, Regex? KeyPattern);
 
+/// <param name="PresenceOnly">
+/// DML only: "Table.Column" names whose values are only checked for being set or NULL, such as dates set with GETDATE(),
+/// which differ between the student's run and the reference run.
+/// </param>
 public sealed record CompareOptions(ColumnMatch Columns, IReadOnlyList<OrderKey> Order, int? Decimals)
 {
     public static CompareOptions Default { get; } = new(ColumnMatch.ByName, [], null);
+
+    public IReadOnlyList<string> PresenceOnly { get; init; } = [];
 
     public bool Ordered => Order.Count > 0;
 }
@@ -87,6 +110,12 @@ public enum SqlFeature
 
     /// <summary>A column alias written without the AS keyword, e.g. <c>InvoiceTotal Total</c> or <c>Total = InvoiceTotal</c>.</summary>
     AliasWithoutAs,
+
+    /// <summary><c>SELECT ... INTO NewTable</c>.</summary>
+    SelectInto,
+
+    /// <summary>An INSERT that doesn't list its columns, e.g. <c>INSERT INTO Categories VALUES ('Brass')</c>.</summary>
+    InsertWithoutColumnList,
 }
 
 public sealed class ContentException(string message) : Exception(message);

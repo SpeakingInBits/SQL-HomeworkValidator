@@ -86,7 +86,7 @@ The app creates and owns its own databases. It never touches the student's worki
 - Name pattern: `HV_<CourseDb>_<dataset>`, e.g. `HV_MyGuitarShop_base`, `HV_AP_edge`.
 - Built from `schema.sql` plus one dataset script.
 - Each database records the content version in an extended property, so the app rebuilds it when an app update changes the schema or data.
-- Throwaway databases for DML/DDL checks use `HV_scratch_<random>` and are dropped after each check (and cleaned up at startup if a previous run crashed).
+- DML checks run inside a rolled-back transaction on these databases. DDL checks (milestone 5) will need throwaway databases named `HV_scratch_<random>`, dropped after each check and cleaned up at startup if a previous run crashed.
 
 ### Datasets
 
@@ -124,15 +124,26 @@ Each question declares `kind: select | dml | ddl`. In every case the student's S
 2. Run the student's query and the reference solution on each dataset's shared database, read-only, with a timeout and row cap.
 3. Compare the two result sets.
 
-### `dml`: INSERT, UPDATE, DELETE
+### `dml`: INSERT, UPDATE, DELETE, SELECT INTO, DROP TABLE
 
-1. Static checks.
-2. For each dataset, build two fresh throwaway databases (or restore from a snapshot; all students have Developer edition): one for the student's script, one for the reference solution.
-3. Run each script as written, including any `BEGIN TRAN`/`COMMIT` of their own.
-4. Compare the final contents of the tables the question targets, confirm all other tables match too, and optionally compare rows affected.
-5. Drop the throwaway databases.
+1. **Static checks.** Allowed statements:
+   - INSERT, UPDATE, DELETE, MERGE and SELECT, including SELECT INTO
+   - DROP TABLE, TRUNCATE TABLE and CREATE TABLE
+   - IF and BEGIN…END blocks
+   - variables, PRINT, SET options and SET IDENTITY_INSERT
+   - the student's own BEGIN TRAN, COMMIT and ROLLBACK
 
-Fresh databases are used instead of wrapping the script in a transaction, because students' own transaction statements interfere with an outer one. The reference solution's result can be cached per dataset and content version so it isn't rebuilt every time.
+   Anything that could reach outside the database is refused: EXEC, database statements, logins, and database names in object names. `USE` statements are blanked out, keeping line numbers. GO batches run separately.
+2. For each dataset, on the validator's existing `HV_` database, inside a transaction that's always rolled back:
+   1. **Reset every identity counter** to the table's current maximum. Rolled-back INSERTs still use up identity values, so without this the reference and the student would get different IDs.
+   2. **Run the question's setup:** the reference solutions of the questions it runs `after` (recursively, with their own setup scripts), then its own `q<n>.setup.sql`.
+   3. **Run the script.** Student scripts run as `hv_writer`, a database user that can read, write and create or drop tables in that database only.
+   4. **Read every table,** then roll back.
+3. **Compare every table** with the state after the reference solution, which is cached per dataset. Each table's rows are compared as a multiset, with columns matched by name. A missing table or one left behind fails. The first differing table is shown in detail and any others are named.
+
+This is much faster than building fresh databases: all 18 DML questions and their mutants verify in a few seconds. If a student's own `COMMIT` or `ROLLBACK` ends the validator's transaction, their changes may have been saved, so the database is rebuilt afterwards and the student gets a note saying so.
+
+**Questions that build on earlier exercises** (VendorCopy from exercise 1, the Brass row from exercise 1) list them in `after`. When the student's own database could give a row a different ID than the validator's copy (for example, if they ran exercise 1 twice), the question's `note` says which ID to use, and the question runs only on datasets where that ID holds.
 
 ### `ddl`: database scripting (CREATE/ALTER DATABASE, TABLE, constraints, views, procedures)
 
@@ -159,7 +170,8 @@ Per-question options:
 
 - Only against databases the app created.
 - Query timeout and row cap on every run.
-- `select` questions run as a low-privilege database user (`EXECUTE AS USER`), which confines them to that database.
+- `select` questions run as a read-only database user, and `dml` questions as a read-write one that can also create and drop tables (`EXECUTE AS USER`). Both are confined to that database.
+- `dml` scripts run inside a transaction that's always rolled back.
 - Statement types are limited per question kind by ScriptDom before anything runs.
 - The rename step above for `ddl`.
 
@@ -186,11 +198,24 @@ hints:
   edge: Check how your query treats products with no category.
 ```
 
-The reference solution sits next to it as `q<n>.sql`, and known-wrong answers go in `q<n>.mutants/*.sql`.
+The reference solution sits next to it as `q<n>.sql`, and known-wrong answers go in `q<n>.mutants/*.sql`. Other correct answers, for questions that can be read more than one way, go in `q<n>.alternatives/*.sql`; an answer passes if it matches the solution or any alternative.
+
+DML questions add:
+
+```yaml
+kind: dml
+after: [q1]                      # run these questions' reference solutions first
+note: >-                         # shown under the prompt
+  In the validator's copy of the database, the Brass row from exercise 1 has CategoryID 5.
+compare:
+  presenceOnly: [Products.DateAdded]   # only check set vs NULL (dates from GETDATE() or typed by hand)
+```
+
+`q<n>.setup.sql` runs after the `after` questions and before the answer. For example, `ap-hw2/q1` uses it to create stale VendorCopy and InvoiceCopy tables, so the answer has to drop them.
 
 **Ordered comparison and ties.** Rows are first compared as a multiset. Then, for ordered questions, the sequence of sort-key values must match the reference's. Rows that tie on the sort keys can therefore come in any order, which is what SQL Server itself guarantees. (MyGuitarShop has two products at 799.99, for example.)
 
-**Rules** available: `From`, `Where`, `Join` (including `FROM a, b`), `Subquery`, `Cte`, `OrderBy` (the statement's own, not `OVER (ORDER BY …)`), `GroupBy`, `Having`, `Distinct`, `Top`, `SelectStar`, `Union`, `AliasWithoutAs`.
+**Rules** available: `From`, `Where`, `Join` (including `FROM a, b`), `Subquery`, `Cte`, `OrderBy` (the statement's own, not `OVER (ORDER BY …)`), `GroupBy`, `Having`, `Distinct`, `Top`, `SelectStar`, `Union`, `AliasWithoutAs`, `SelectInto`, `InsertWithoutColumnList`. For UPDATE and DELETE, `From`, `Where` and `Join` look at the statement's own FROM and WHERE.
 
 ### Instructor commands
 
@@ -216,13 +241,15 @@ The reference solution sits next to it as `q<n>.sql`, and known-wrong answers go
 1. **Core + CLI, SELECT only** (done): split both course scripts into schema and base data, build `HV_` databases, run a student query and the reference solution, compare, report. Question format, `hv verify` with mutants, and the first homework for each database (`ap-hw1`, `mgs-hw1`).
 2. **Edge and shifted datasets** (done) for both databases. `hv verify` passes: all 43 mutants for `ap-hw1` and `mgs-hw1` are caught, including the four the base data couldn't catch. CI (GitHub Actions, added in its own PR) builds, runs the unit tests and runs `hv verify` against SQL Server in a container.
 3. **Avalonia app for SELECT** (done): connection page, automatic database setup, question tree with saved status, SQL editor with saved answers, and results with differences and hints. Avalonia 12.
-4. **DML questions:** throwaway databases, table-state comparison.
+4. **DML questions** (done): `ap-hw2` and `mgs-hw2`, with setup chains, notes, alternatives and presence-only columns. The AP edge data gained an invoice that makes AP exercises 6 and 7 actually change something; in the course data they don't. The app shows which table differs, and a user journey test covers a DML question.
 5. **DDL questions:** rename step, schema comparison, behavior tests.
 6. **Packaging:** builds per platform, signing, install instructions for students.
 
 ## Open questions
 
 - **Assignments:** the next homework for each database, as it's ready.
+- **AP homework 2, exercise 5:** "change the PaymentTotal to the balance due" is accepted two ways: `PaymentTotal = InvoiceTotal - PaymentTotal - CreditTotal` (the literal reading, the reference solution) and `PaymentTotal = InvoiceTotal - CreditTotal` (pays the invoice off). They differ only for partly paid invoices. Remove whichever you don't want from `ap-hw2/q5.sql` or `q5.alternatives/`.
+- **"Use the CategoryID column to identify the row"** (MyGuitarShop homework 2, exercises 2 and 3) isn't enforced: `WHERE CategoryName = 'Brass'` gives the same tables and passes. A rule for "WHERE must use column X" could be added if that matters.
 - **Content updates:** ship new assignments only with app releases, or let the app download content separately?
 - **Grading use:** should `hv check` also batch-grade a folder of submissions?
 - **Signing:** whether to pay for macOS and Windows code signing.

@@ -1,0 +1,13 @@
+title: Change terms using a join
+kind: dml
+after: [q1]
+datasets: [base, edge]
+prompt: |
+  Solve exercise 6 using a join rather than a subquery.
+rules:
+  require: [Join]
+  forbid: [Subquery]
+hints:
+  edge: >-
+    The edge data has an invoice from a vendor whose DefaultTermsID is 2 but whose own
+    TermsID is 3. Your UPDATE should change it to 2.

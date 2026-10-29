@@ -1,0 +1,10 @@
+title: Copy non-California vendors into VendorCopy
+kind: dml
+after: [q1]
+prompt: |
+  Write an INSERT statement that adds a row to the VendorCopy table for each
+  non-California vendor in the Vendors table. (This will result in duplicate vendors
+  in the VendorCopy table.)
+compare:
+  # The new rows' VendorID values depend on the order the rows are inserted in, which the question doesn't specify.
+  presenceOnly: [VendorCopy.VendorID]

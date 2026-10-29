@@ -1,21 +1,33 @@
+using System.Text;
+using System.Text.RegularExpressions;
 using HomeworkValidator.Core.Content;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace HomeworkValidator.Core.Sql;
 
 /// <summary>What the validator found in a student's script before running anything.</summary>
+/// <param name="Batches">
+/// The SQL to run, one entry per GO batch, each padded with blank lines so SQL Server's error line numbers
+/// match the student's file. Empty when the script can't be run.
+/// </param>
 public sealed record ScriptAnalysis(
     IReadOnlyList<string> Errors,
     IReadOnlyList<string> Notes,
     IReadOnlySet<SqlFeature> Features,
-    string? ExecutableSql)
+    IReadOnlyList<string> Batches)
 {
-    public bool IsRunnable => Errors.Count == 0 && ExecutableSql is not null;
+    public bool IsRunnable => Errors.Count == 0 && Batches.Count > 0;
 }
 
 /// <summary>Parses T-SQL with ScriptDom, enforces which statements a question kind allows, and detects features for rules.</summary>
 public static class ScriptAnalyzer
 {
+    public static ScriptAnalysis Analyze(string sql, QuestionKind kind) => kind switch
+    {
+        QuestionKind.Dml => AnalyzeDml(sql),
+        _ => AnalyzeSelect(sql),
+    };
+
     /// <summary>
     /// Analyzes a script for a SELECT question: exactly one SELECT statement, no SELECT INTO,
     /// and no database or server names (those would reach outside the validator's databases).
@@ -23,18 +35,9 @@ public static class ScriptAnalyzer
     /// </summary>
     public static ScriptAnalysis AnalyzeSelect(string sql)
     {
-        var parser = new TSql170Parser(initialQuotedIdentifiers: true);
-        var fragment = parser.Parse(new StringReader(sql), out var parseErrors);
+        if (Parse(sql) is not { } script)
+            return SyntaxErrors(sql);
 
-        if (parseErrors.Count > 0)
-        {
-            var errors = parseErrors
-                .Select(e => $"Syntax error on line {e.Line}, column {e.Column}: {e.Message}")
-                .ToList();
-            return new ScriptAnalysis(errors, [], new HashSet<SqlFeature>(), null);
-        }
-
-        var script = (TSqlScript)fragment;
         var statements = script.Batches.SelectMany(b => b.Statements).ToList();
         var problems = new List<string>();
         var notes = new List<string>();
@@ -45,7 +48,7 @@ public static class ScriptAnalyzer
             switch (statement)
             {
                 case UseStatement use:
-                    notes.Add($"Ignored 'USE {use.DatabaseName.Value}': the validator runs your query against its own copy of the database.");
+                    notes.Add(UseNote(use));
                     break;
                 case SelectStatement { Into: not null }:
                     problems.Add($"Line {statement.StartLine}: SELECT INTO creates a table. This question only needs a SELECT query.");
@@ -67,16 +70,79 @@ public static class ScriptAnalyzer
         var visitor = new FeatureVisitor();
         foreach (var select in selects)
             select.Accept(visitor);
-        problems.AddRange(visitor.QualifiedNames.Select(n =>
-            $"Line {n.StartLine}: remove the database name from '{Text(sql, n)}'. The validator runs your query against its own copy of the database."));
+        problems.AddRange(QualifiedNameProblems(sql, visitor));
 
         if (problems.Count > 0)
-            return new ScriptAnalysis(problems, notes, visitor.Features, null);
+            return new ScriptAnalysis(problems, notes, visitor.Features, []);
 
         var only = selects[0];
-        // Pad with newlines so line numbers in SQL Server errors match the student's file.
-        var executable = new string('\n', only.StartLine - 1) + Text(sql, only);
-        return new ScriptAnalysis([], notes, visitor.Features, executable);
+        return new ScriptAnalysis([], notes, visitor.Features, [Pad(only.StartLine) + Text(sql, only)]);
+    }
+
+    /// <summary>
+    /// Analyzes a script for a DML question: INSERT, UPDATE, DELETE, SELECT (including INTO), DROP TABLE and
+    /// the control flow and transaction statements that usually come with them. Anything that could reach
+    /// outside the validator's database (EXEC, database statements, database names) is refused.
+    /// USE statements are blanked out so the script runs against the validator's copy.
+    /// </summary>
+    public static ScriptAnalysis AnalyzeDml(string sql)
+    {
+        if (Parse(sql) is not { } script)
+            return SyntaxErrors(sql);
+
+        var problems = new List<string>();
+        var notes = new List<string>();
+        var visitor = new FeatureVisitor();
+        var uses = new List<UseStatement>();
+
+        foreach (var statement in script.Batches.SelectMany(b => b.Statements))
+            CheckDmlStatement(statement, problems, uses);
+
+        script.Accept(visitor);
+        problems.AddRange(QualifiedNameProblems(sql, visitor));
+        notes.AddRange(uses.Select(UseNote));
+
+        var hasWork = script.Batches.SelectMany(b => b.Statements).Any(s => s is not UseStatement);
+        if (!hasWork && problems.Count == 0)
+            problems.Add("No SQL statements found.");
+
+        if (problems.Count > 0)
+            return new ScriptAnalysis(problems, notes, visitor.Features, []);
+
+        var batches = script.Batches
+            .Where(b => b.Statements.Any(s => s is not UseStatement))
+            .Select(b => Pad(b.StartLine) + Blank(Text(sql, b), b.StartOffset, uses))
+            .ToList();
+        return new ScriptAnalysis([], notes, visitor.Features, batches);
+    }
+
+    private static void CheckDmlStatement(TSqlStatement statement, List<string> problems, List<UseStatement> uses)
+    {
+        switch (statement)
+        {
+            case UseStatement use:
+                uses.Add(use);
+                break;
+            case IfStatement ifStatement:
+                CheckDmlStatement(ifStatement.ThenStatement, problems, uses);
+                if (ifStatement.ElseStatement is not null)
+                    CheckDmlStatement(ifStatement.ElseStatement, problems, uses);
+                break;
+            case BeginEndBlockStatement block:
+                foreach (var inner in block.StatementList.Statements)
+                    CheckDmlStatement(inner, problems, uses);
+                break;
+            case InsertStatement or UpdateStatement or DeleteStatement or MergeStatement or SelectStatement
+                or DropTableStatement or TruncateTableStatement or CreateTableStatement
+                or DeclareVariableStatement or SetVariableStatement or PrintStatement
+                or PredicateSetStatement or SetIdentityInsertStatement
+                or BeginTransactionStatement or CommitTransactionStatement or RollbackTransactionStatement or SaveTransactionStatement:
+                break;
+            default:
+                problems.Add($"Line {statement.StartLine}: {Describe(statement)} isn't allowed here. " +
+                             "Use INSERT, UPDATE, DELETE, SELECT and DROP TABLE statements.");
+                break;
+        }
     }
 
     /// <summary>Returns rule violations for the detected features.</summary>
@@ -103,8 +169,32 @@ public static class ScriptAnalyzer
         SqlFeature.SelectStar => "SELECT *",
         SqlFeature.Union => "UNION, INTERSECT or EXCEPT",
         SqlFeature.AliasWithoutAs => "column aliases without the AS keyword (write 'expression AS Alias')",
+        SqlFeature.SelectInto => "SELECT INTO",
+        SqlFeature.InsertWithoutColumnList => "an INSERT without a column list (list the columns: INSERT INTO Table (Column1, Column2) ...)",
         _ => feature.ToString(),
     };
+
+    private static TSqlScript? Parse(string sql)
+    {
+        var parser = new TSql170Parser(initialQuotedIdentifiers: true);
+        var fragment = parser.Parse(new StringReader(sql), out var errors);
+        return errors.Count == 0 ? (TSqlScript)fragment : null;
+    }
+
+    private static ScriptAnalysis SyntaxErrors(string sql)
+    {
+        var parser = new TSql170Parser(initialQuotedIdentifiers: true);
+        parser.Parse(new StringReader(sql), out var errors);
+        var messages = errors.Select(e => $"Syntax error on line {e.Line}, column {e.Column}: {e.Message}").ToList();
+        return new ScriptAnalysis(messages, [], new HashSet<SqlFeature>(), []);
+    }
+
+    private static string UseNote(UseStatement use) =>
+        $"Ignored 'USE {use.DatabaseName.Value}': the validator runs your SQL against its own copy of the database.";
+
+    private static IEnumerable<string> QualifiedNameProblems(string sql, FeatureVisitor visitor) =>
+        visitor.QualifiedNames.Select(n =>
+            $"Line {n.StartLine}: remove the database name from '{Text(sql, n)}'. The validator runs your SQL against its own copy of the database.");
 
     private static string Describe(TSqlStatement statement)
     {
@@ -112,13 +202,31 @@ public static class ScriptAnalyzer
         var name = statement.GetType().Name;
         if (name.EndsWith("Statement", StringComparison.Ordinal))
             name = name[..^"Statement".Length];
-        var words = System.Text.RegularExpressions.Regex.Replace(name, "(?<=[a-z])(?=[A-Z])", " ").ToUpperInvariant();
+        var words = Regex.Replace(name, "(?<=[a-z])(?=[A-Z])", " ").ToUpperInvariant();
         var article = "AEIOU".Contains(words[0]) ? "an" : "a";
         return $"{article} {words} statement";
     }
 
     private static string Text(string sql, TSqlFragment fragment) =>
         sql.Substring(fragment.StartOffset, fragment.FragmentLength);
+
+    private static string Pad(int startLine) => new('\n', startLine - 1);
+
+    /// <summary>Replaces the USE statements inside a batch with spaces, keeping line breaks so line numbers don't move.</summary>
+    private static string Blank(string batch, int batchOffset, List<UseStatement> uses)
+    {
+        var text = new StringBuilder(batch);
+        foreach (var use in uses.Where(u => u.StartOffset >= batchOffset && u.StartOffset < batchOffset + batch.Length))
+        {
+            for (var i = use.StartOffset - batchOffset; i < use.StartOffset - batchOffset + use.FragmentLength; i++)
+            {
+                if (text[i] is not ('\r' or '\n'))
+                    text[i] = ' ';
+            }
+        }
+
+        return text.ToString();
+    }
 
     private sealed class FeatureVisitor : TSqlFragmentVisitor
     {
@@ -131,17 +239,13 @@ public static class ScriptAnalyzer
                 Features.Add(SqlFeature.OrderBy);
             if (node.WithCtesAndXmlNamespaces?.CommonTableExpressions.Count > 0)
                 Features.Add(SqlFeature.Cte);
+            if (node.Into is not null)
+                Features.Add(SqlFeature.SelectInto);
         }
 
         public override void Visit(QuerySpecification node)
         {
-            if (node.FromClause is not null)
-            {
-                Features.Add(SqlFeature.From);
-                // FROM a, b is an old-style join.
-                if (node.FromClause.TableReferences.Count > 1)
-                    Features.Add(SqlFeature.Join);
-            }
+            AddFrom(node.FromClause);
             if (node.WhereClause is not null)
                 Features.Add(SqlFeature.Where);
             if (node.GroupByClause is not null)
@@ -152,6 +256,26 @@ public static class ScriptAnalyzer
                 Features.Add(SqlFeature.Distinct);
             if (node.TopRowFilter is not null)
                 Features.Add(SqlFeature.Top);
+        }
+
+        public override void Visit(UpdateSpecification node)
+        {
+            AddFrom(node.FromClause);
+            if (node.WhereClause is not null)
+                Features.Add(SqlFeature.Where);
+        }
+
+        public override void Visit(DeleteSpecification node)
+        {
+            AddFrom(node.FromClause);
+            if (node.WhereClause is not null)
+                Features.Add(SqlFeature.Where);
+        }
+
+        public override void Visit(InsertSpecification node)
+        {
+            if (node.Columns.Count == 0)
+                Features.Add(SqlFeature.InsertWithoutColumnList);
         }
 
         public override void Visit(QualifiedJoin node) => Features.Add(SqlFeature.Join);
@@ -185,6 +309,16 @@ public static class ScriptAnalyzer
         {
             if (node.DatabaseIdentifier is not null || node.ServerIdentifier is not null)
                 QualifiedNames.Add(node);
+        }
+
+        private void AddFrom(FromClause? from)
+        {
+            if (from is null)
+                return;
+            Features.Add(SqlFeature.From);
+            // FROM a, b is an old-style join.
+            if (from.TableReferences.Count > 1)
+                Features.Add(SqlFeature.Join);
         }
     }
 }

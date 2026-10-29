@@ -37,3 +37,19 @@ VALUES
     -- Invalid: nothing due, but no payment date.
     (@vendor, 'EDGE-NO-DATE',  '2023-02-08',   300.00,   300.00,  0.00, 3, '2023-03-10', NULL);
 GO
+
+-- A vendor whose default terms are 2, with an invoice on different terms (3). In the course data every
+-- invoice from such a vendor already has TermsID 2, so "set TermsID to 2 for invoices from vendors with
+-- DefaultTermsID 2" changes nothing there; this row makes a do-nothing UPDATE fail.
+INSERT Vendors (VendorName, VendorAddress1, VendorAddress2, VendorCity, VendorState, VendorZipCode,
+                VendorPhone, VendorContactLName, VendorContactFName, DefaultTermsID, DefaultAccountNo)
+VALUES ('Edge Terms Supply', '300 Boundary Way', NULL, 'Fresno', 'CA', '93711',
+        '(559) 555-0101', 'Ortega', 'Luis', 2, 570);
+GO
+
+DECLARE @termsVendor int = (SELECT VendorID FROM Vendors WHERE VendorName = 'Edge Terms Supply');
+
+INSERT Invoices (VendorID, InvoiceNumber, InvoiceDate, InvoiceTotal, PaymentTotal, CreditTotal,
+                 TermsID, InvoiceDueDate, PaymentDate)
+VALUES (@termsVendor, 'EDGE-TERMS', '2023-02-09', 820.00, 820.00, 0.00, 3, '2023-03-11', '2023-02-25');
+GO

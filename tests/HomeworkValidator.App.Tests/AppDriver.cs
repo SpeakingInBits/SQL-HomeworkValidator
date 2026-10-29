@@ -83,10 +83,22 @@ public sealed class AppDriver
     /// <summary>Moves the mouse to the middle of the control and clicks.</summary>
     public void Click(Control control)
     {
+        // Scroll it into view, then let layout and rendering catch up so positions and hit testing are current.
         control.BringIntoView();
+        Window.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
+        Window.CaptureRenderedFrame()?.Dispose(); // hit testing uses the last rendered frame
         var center = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), Window)
             ?? throw new InvalidOperationException($"{control.GetType().Name} isn't in the window.");
+
+        // A student can only click what they can see. If something else is on top (a scrollbar, another panel),
+        // the click would land there, so fail with a clear message instead of a confusing one later.
+        if (Window.InputHitTest(center) is not Visual hit || (hit != control && !hit.GetVisualAncestors().Contains(control)))
+        {
+            var screenshot = Screenshot("blocked-click");
+            throw new InvalidOperationException(
+                $"Clicking the middle of the {control.GetType().Name} at {center} would hit {Describe(Window.InputHitTest(center))} instead. Screenshot: {screenshot}");
+        }
 
         Window.MouseMove(center);
         Window.MouseDown(center, MouseButton.Left);
@@ -162,6 +174,13 @@ public sealed class AppDriver
         Dispatcher.UIThread.RunJobs();
         return TestAppBuilder.SaveScreenshot(Window, $"{Name}-{++_screenshot:00}-{step}");
     }
+
+    private static string Describe(IInputElement? element) => element switch
+    {
+        null => "nothing",
+        TextBlock text => $"the text '{text.Text}'",
+        _ => $"a {element.GetType().Name}",
+    };
 
     private IEnumerable<T> Visible<T>() where T : Control =>
         Window.GetVisualDescendants().OfType<T>().Where(c => c.IsEffectivelyVisible);

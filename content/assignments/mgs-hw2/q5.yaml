@@ -1,0 +1,12 @@
+title: Discount the digital piano
+kind: dml
+after: [q4]
+# The piano's ProductID is 11 only in the course data; the edge data adds products before it.
+datasets: [base]
+prompt: |
+  Write an UPDATE statement that modifies the product you added in exercise 4. This
+  statement should change the DiscountPercent column from 0% to 35%.
+note: >-
+  In the validator's copy of the database, the dgx_640 product from exercise 4 has ProductID 11.
+compare:
+  presenceOnly: [Products.DateAdded]

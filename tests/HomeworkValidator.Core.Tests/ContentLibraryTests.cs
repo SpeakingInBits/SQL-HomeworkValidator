@@ -105,4 +105,57 @@ public sealed class ContentLibraryTests : IDisposable
 
         Assert.Throws<ContentException>(() => ContentLibrary.Load(_root));
     }
+
+    private void WriteDmlQuestion(int number, string extraYaml = "")
+    {
+        Write($"assignments/hw2/q{number}.sql", "UPDATE Items SET ItemID = ItemID;");
+        Write($"assignments/hw2/q{number}.yaml", $"title: T{number}\nprompt: P\nkind: dml\n{extraYaml}");
+    }
+
+    [Fact]
+    public void Dml_questions_load_setup_alternatives_and_after()
+    {
+        Write("assignments/hw2/assignment.yaml", "title: Homework 2\ndatabase: Shop");
+        WriteDmlQuestion(1);
+        Write("assignments/hw2/q1.setup.sql", "DELETE Items;");
+        WriteDmlQuestion(2, "after: [q1]\nnote: Use ID 5.\ncompare:\n  presenceOnly: [Items.ItemID]");
+        Write("assignments/hw2/q2.alternatives/other-reading.sql", "DELETE Items;");
+
+        var content = ContentLibrary.Load(_root);
+        var q1 = content.GetQuestion("hw2/q1");
+        var q2 = content.GetQuestion("hw2/q2");
+
+        Assert.Equal("DELETE Items;", q1.SetupSql);
+        Assert.Equal(["hw2/q1"], q2.After);
+        Assert.Equal("Use ID 5.", q2.Note);
+        Assert.Equal(["Items.ItemID"], q2.Compare.PresenceOnly);
+        Assert.Equal("other-reading", Assert.Single(q2.Alternatives).Name);
+    }
+
+    [Theory]
+    [InlineData("after: [q2]", "earlier question")]       // not earlier
+    [InlineData("after: [q9]", "earlier question")]       // doesn't exist (and isn't earlier)
+    [InlineData("compare:\n  order: [ItemID]", "compare whole tables")]
+    [InlineData("compare:\n  presenceOnly: [ItemID]", "Table.Column")]
+    public void Bad_dml_options_are_rejected(string yaml, string message)
+    {
+        Write("assignments/hw2/assignment.yaml", "title: Homework 2\ndatabase: Shop");
+        WriteDmlQuestion(1);
+        WriteDmlQuestion(2, yaml);
+
+        var ex = Assert.Throws<ContentException>(() => ContentLibrary.Load(_root));
+        Assert.Contains(message, ex.Message);
+    }
+
+    [Fact]
+    public void After_must_name_a_dml_question()
+    {
+        Write("assignments/hw2/assignment.yaml", "title: Homework 2\ndatabase: Shop");
+        Write("assignments/hw2/q1.sql", "SELECT 1;");
+        Write("assignments/hw2/q1.yaml", "title: T1\nprompt: P");
+        WriteDmlQuestion(2, "after: [q1]");
+
+        var ex = Assert.Throws<ContentException>(() => ContentLibrary.Load(_root));
+        Assert.Contains("isn't a kind: dml question", ex.Message);
+    }
 }

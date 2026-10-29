@@ -1,0 +1,13 @@
+title: Rename Brass to Woodwinds
+kind: dml
+after: [q1]
+# The Brass row's ID is 10000 in the shifted data, so the 5 in the note only holds for these two.
+datasets: [base, edge]
+prompt: |
+  Write an UPDATE statement that modifies the row you just added to the Categories
+  table. This statement should change the CategoryName column to "Woodwinds", and it
+  should use the CategoryID column to identify the row.
+note: >-
+  In the validator's copy of the database, the Brass row from exercise 1 has CategoryID 5.
+  Your own database may have given it a different number if you ran exercise 1 more than
+  once; use 5 here.

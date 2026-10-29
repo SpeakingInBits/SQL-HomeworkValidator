@@ -1,0 +1,9 @@
+title: Add the Brass category
+kind: dml
+prompt: |
+  Write an INSERT statement that adds this row to the Categories table:
+
+    CategoryName: Brass
+
+  Code the INSERT statement so SQL Server automatically generates the value for the
+  CategoryID column.

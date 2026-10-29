@@ -26,6 +26,11 @@ public static class Commands
         output.Dim($"Database: {question.Database}");
         output.Line();
         output.Line(question.Prompt);
+        if (question.Note is not null)
+        {
+            output.Line();
+            output.Warn($"Note: {question.Note}");
+        }
         return 0;
     }
 
@@ -135,21 +140,22 @@ public static class Commands
                     output.Pass($"  PASS  {dataset.Dataset} data");
                     break;
                 case DatasetOutcome.Error:
-                    output.Fail($"  ERROR {dataset.Dataset} data: your query failed to run.");
+                    output.Fail($"  ERROR {dataset.Dataset} data: your {(report.Question.Kind == QuestionKind.Dml ? "script" : "query")} failed to run.");
                     foreach (var line in dataset.Message.Split(Environment.NewLine))
                         output.Line($"        {line}");
                     break;
                 default:
+                    var table = dataset.Comparison?.Table;
                     output.Fail($"  FAIL  {dataset.Dataset} data");
                     output.Line($"        {dataset.Message}");
                     if (dataset.Comparison?.Missing is { } missing)
                     {
-                        output.Line("        Missing rows:");
+                        output.Line(table is null ? "        Missing rows:" : $"        Rows missing from {table}:");
                         output.Table(missing, "          ");
                     }
                     if (dataset.Comparison?.Unexpected is { } unexpected)
                     {
-                        output.Line("        Rows that shouldn't be there:");
+                        output.Line(table is null ? "        Rows that shouldn't be there:" : $"        Rows in {table} that shouldn't be there:");
                         output.Table(unexpected, "          ");
                     }
                     if (dataset.Hint is not null)

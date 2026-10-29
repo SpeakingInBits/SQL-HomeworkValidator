@@ -1,0 +1,21 @@
+title: Add the Yamaha digital piano
+kind: dml
+# Category 4 doesn't exist in the shifted data.
+datasets: [base, edge]
+prompt: |
+  Write an INSERT statement that adds this row to the Products table:
+
+    ProductID:        The next automatically generated ID
+    CategoryID:       4
+    ProductCode:      dgx_640
+    ProductName:      Yamaha DGX 640 88-Key Digital Piano
+    Description:      Long description to come.
+    ListPrice:        799.99
+    DiscountPercent:  0
+    DateAdded:        Today's date/time.
+
+  Use a column list for this statement.
+compare:
+  presenceOnly: [Products.DateAdded]
+rules:
+  forbid: [InsertWithoutColumnList]
