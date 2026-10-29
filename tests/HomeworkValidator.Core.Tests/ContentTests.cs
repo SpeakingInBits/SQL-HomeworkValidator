@@ -31,14 +31,30 @@ public class ContentTests
 
     [Theory]
     [MemberData(nameof(QuestionIds))]
-    public void Reference_solution_is_a_single_select_that_follows_its_rules(string id)
+    public void Reference_solutions_are_valid_for_their_kind_and_follow_the_rules(string id)
     {
         var question = Content.GetQuestion(id);
 
-        var analysis = ScriptAnalyzer.AnalyzeSelect(question.SolutionSql);
+        foreach (var sql in question.Alternatives.Select(a => a.Sql).Prepend(question.SolutionSql))
+        {
+            var analysis = ScriptAnalyzer.Analyze(sql, question.Kind);
 
-        Assert.True(analysis.IsRunnable, string.Join(" ", analysis.Errors));
-        Assert.Empty(ScriptAnalyzer.CheckRules(analysis.Features, question.Rules));
+            Assert.True(analysis.IsRunnable, string.Join(" ", analysis.Errors));
+            Assert.Empty(ScriptAnalyzer.CheckRules(analysis.Features, question.Rules));
+        }
+    }
+
+    [Fact]
+    public void Dml_homework_is_loaded_with_its_setup()
+    {
+        var q1 = Content.GetQuestion("ap-hw2/q1");
+        var q5 = Content.GetQuestion("ap-hw2/q5");
+
+        Assert.Equal(QuestionKind.Dml, q1.Kind);
+        Assert.NotNull(q1.SetupSql);
+        Assert.NotNull(q1.Note);
+        Assert.Equal(["ap-hw2/q1"], q5.After);
+        Assert.Equal(["InvoiceCopy.PaymentDate"], q5.Compare.PresenceOnly);
     }
 
     [Fact]

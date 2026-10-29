@@ -34,6 +34,7 @@ public partial class QuestionViewModel : ViewModelBase
     public string Title => $"{Question.Number}. {Question.Title}";
     public string Heading => $"Question {Question.Number}: {Question.Title}";
     public string Details => $"{Question.Id} · {Question.Database} database";
+    public string? Note => Question.Note;
 
     /// <summary>The editor's document. AvaloniaEdit's TextEditor binds to it directly.</summary>
     public TextDocument Document { get; }

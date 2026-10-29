@@ -1,0 +1,9 @@
+title: Delete category 4 and its products
+kind: dml
+after: [q4]
+datasets: [base, edge]
+prompt: |
+  Write a DELETE statement that deletes the row in the Categories table that has an ID
+  of 4. When you execute this statement, it will produce an error since the category
+  has related rows in the Products table. To fix that, precede the DELETE statement
+  with another DELETE statement that deletes all products in this category.

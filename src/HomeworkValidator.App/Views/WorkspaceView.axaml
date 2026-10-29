@@ -46,17 +46,20 @@
         <Grid Grid.Row="2" ColumnDefinitions="310,Auto,*">
 
             <!-- Assignments and questions -->
-            <TreeView Grid.Column="0" ItemsSource="{Binding Assignments}" SelectedItem="{Binding SelectedNode}" Margin="4,8">
+            <!-- No horizontal scrolling: long titles are trimmed with "...", and a horizontal scrollbar would cover the last question. -->
+            <TreeView Grid.Column="0" ItemsSource="{Binding Assignments}" SelectedItem="{Binding SelectedNode}" Margin="4,8"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <TreeView.DataTemplates>
                     <TreeDataTemplate DataType="vm:AssignmentViewModel" ItemsSource="{Binding Questions}">
                         <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
                     </TreeDataTemplate>
                     <DataTemplate DataType="vm:QuestionViewModel">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="{Binding StatusGlyph}" Width="12" FontWeight="Bold"
+                        <!-- A Grid rather than a horizontal StackPanel, so the title gets a fixed width and can end in "..." -->
+                        <Grid ColumnDefinitions="20,*">
+                            <TextBlock Grid.Column="0" Text="{Binding StatusGlyph}" FontWeight="Bold"
                                        Classes.pass="{Binding IsPassed}" Classes.fail="{Binding IsFailed}" />
-                            <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                        </StackPanel>
+                            <TextBlock Grid.Column="1" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                        </Grid>
                     </DataTemplate>
                 </TreeView.DataTemplates>
             </TreeView>
@@ -79,8 +82,14 @@
                 <Border Grid.Row="1" Margin="0,10,0,0" Padding="12,8" CornerRadius="6"
                         Background="{DynamicResource PanelBrush}">
                     <ScrollViewer MaxHeight="200">
-                        <SelectableTextBlock Text="{Binding SelectedQuestion.Question.Prompt}" TextWrapping="Wrap"
-                                             FontFamily="{StaticResource CodeFont}" FontSize="13" />
+                        <StackPanel Spacing="8">
+                            <SelectableTextBlock Text="{Binding SelectedQuestion.Question.Prompt}" TextWrapping="Wrap"
+                                                 FontFamily="{StaticResource CodeFont}" FontSize="13" />
+                            <!-- e.g. which ID an earlier exercise's row gets in the validator's copy -->
+                            <Border Classes="hint" IsVisible="{Binding SelectedQuestion.Note, Converter={x:Static ObjectConverters.IsNotNull}}">
+                                <TextBlock Text="{Binding SelectedQuestion.Note, StringFormat='Note: {0}'}" TextWrapping="Wrap" />
+                            </Border>
+                        </StackPanel>
                     </ScrollViewer>
                 </Border>
 

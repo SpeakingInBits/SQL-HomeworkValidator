@@ -129,6 +129,44 @@ public class UserJourneyTests
 
     [AvaloniaFact]
     [Trait("Category", "NeedsSqlServer")]
+    public async Task Student_works_through_DML_questions()
+    {
+        var app = AppDriver.Launch(new MainViewModel(Content, appDataFolder: TestAppBuilder.NewTempFolder()), "dml-journey");
+        await ConnectAsync(app);
+
+        // Exercise 6 as the book expects students to first try it: the DELETE fails because products still use category 4.
+        app.Click(app.TreeItem("6. Delete category 4"));
+        app.WriteAnswer("DELETE Categories\nWHERE CategoryID = 4;");
+        app.Press(PhysicalKey.F5);
+
+        await app.WaitUntil(() => app.Shows("Not quite"), "the result of deleting the category alone");
+        app.Screenshot("foreign-key-error");
+        Assert.True(app.ShowsTextStartingWith("Your script failed to run: Line 1: The DELETE statement conflicted with the REFERENCE constraint"));
+
+        // Delete the products first, as the exercise says.
+        app.WriteAnswer("DELETE Products\nWHERE CategoryID = 4;\n\nDELETE Categories\nWHERE CategoryID = 4;");
+        app.Click(app.Button("Check (F5)"));
+
+        await app.WaitUntil(() => app.Shows("Correct!"), "the result of the fixed script");
+        app.Screenshot("fixed");
+        Assert.True(app.Shows("Your script leaves every table as expected on all 2 datasets."));
+        Assert.Equal("✓", app.TreeMark("6. Delete category 4"));
+
+        // Exercise 2 tells the student which ID the earlier exercise's row has, and shows table differences when wrong.
+        app.Click(app.TreeItem("2. Rename Brass to Woodwinds"));
+        Assert.True(app.ShowsTextStartingWith("Note: In the validator's copy of the database, the Brass row from exercise 1 has CategoryID 5."));
+        app.WriteAnswer("UPDATE Categories\nSET CategoryName = 'Woodwinds'\nWHERE CategoryID = 4;");
+        app.Press(PhysicalKey.F5);
+
+        await app.WaitUntil(() => app.Shows("Not quite"), "the result of renaming the wrong category");
+        app.Screenshot("wrong-row");
+        Assert.True(app.ShowsTextStartingWith("Missing from Categories (2)"));
+        Assert.True(app.ShowsTextStartingWith("In Categories but not expected (2)"));
+        Assert.True(app.Shows("Woodwinds"));
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "NeedsSqlServer")]
     public async Task A_wrong_password_says_the_login_was_rejected()
     {
         var server = TestServer();

@@ -11,6 +11,9 @@ public sealed record RowSample(IReadOnlyList<string> Columns, IReadOnlyList<IRea
 public sealed record ComparisonResult(bool Passed, string Message, RowSample? Missing = null, RowSample? Unexpected = null)
 {
     public static ComparisonResult Pass { get; } = new(true, "Matches the expected result.");
+
+    /// <summary>For DML questions, the table the rows belong to; null for a query's result.</summary>
+    public string? Table { get; init; }
 }
 
 /// <summary>
@@ -22,18 +25,22 @@ public static class ResultComparer
     public const int DefaultSampleSize = 5;
 
     /// <param name="sampleSize">How many missing and unexpected rows to include for display.</param>
-    public static ComparisonResult Compare(ResultTable expected, ResultTable actual, CompareOptions options, int sampleSize = DefaultSampleSize)
+    /// <param name="table">When comparing a table after a DML script rather than a query's result: its name, for the messages.</param>
+    public static ComparisonResult Compare(ResultTable expected, ResultTable actual, CompareOptions options,
+        int sampleSize = DefaultSampleSize, string? table = null)
     {
+        var words = new Wording(table);
+
         if (options.Columns == ColumnMatch.RowCount)
         {
             return expected.Rows.Count == actual.Rows.Count
                 ? ComparisonResult.Pass
-                : new ComparisonResult(false, $"Expected {Rows(expected.Rows.Count)}, but your query returned {Rows(actual.Rows.Count)}.");
+                : new ComparisonResult(false, words.RowCounts(expected.Rows.Count, actual.Rows.Count));
         }
 
-        var (map, columnError) = AlignColumns(expected.Columns, actual.Columns, options.Columns);
+        var (map, columnError) = AlignColumns(expected.Columns, actual.Columns, options.Columns, words);
         if (columnError is not null)
-            return new ComparisonResult(false, columnError);
+            return new ComparisonResult(false, columnError) { Table = table };
 
         var expectedRows = expected.Rows.Select(r => Format(r, options.Decimals)).ToList();
         var actualRows = actual.Rows.Select(r => Format(map!.Select(i => r[i]).ToArray(), options.Decimals)).ToList();
@@ -43,18 +50,37 @@ public static class ResultComparer
         {
             var parts = new List<string>();
             if (expected.Rows.Count != actual.Rows.Count)
-                parts.Add($"Expected {Rows(expected.Rows.Count)}, but your query returned {Rows(actual.Rows.Count)}.");
+                parts.Add(words.RowCounts(expected.Rows.Count, actual.Rows.Count));
             if (missing.Count > 0)
-                parts.Add($"{Rows(missing.Count)} from the expected result {(missing.Count == 1 ? "is" : "are")} missing.");
+                parts.Add(words.Missing(missing.Count));
             if (unexpected.Count > 0)
-                parts.Add($"{Rows(unexpected.Count)} in your result {(unexpected.Count == 1 ? "isn't" : "aren't")} in the expected result.");
+                parts.Add(words.Unexpected(unexpected.Count));
 
             return new ComparisonResult(false, string.Join(" ", parts),
                 Missing: missing.Count > 0 ? Sample(expected.Columns, missing, sampleSize) : null,
-                Unexpected: unexpected.Count > 0 ? Sample(expected.Columns, unexpected, sampleSize) : null);
+                Unexpected: unexpected.Count > 0 ? Sample(expected.Columns, unexpected, sampleSize) : null) { Table = table };
         }
 
         return options.Ordered ? CompareOrder(expected.Columns, expectedRows, actualRows, options.Order) : ComparisonResult.Pass;
+    }
+
+    /// <summary>The same messages for a query's result ("your query returned...") and for a table ("VendorCopy has...").</summary>
+    private sealed record Wording(string? Table)
+    {
+        public string RowCounts(int expected, int actual) => Table is null
+            ? $"Expected {Rows(expected)}, but your query returned {Rows(actual)}."
+            : $"Expected {Table} to have {Rows(expected)}, but it has {Rows(actual)}.";
+
+        public string Missing(int count) => Table is null
+            ? $"{Rows(count)} from the expected result {(count == 1 ? "is" : "are")} missing."
+            : $"{Rows(count)} {(count == 1 ? "is" : "are")} missing from {Table}.";
+
+        public string Unexpected(int count) => Table is null
+            ? $"{Rows(count)} in your result {(count == 1 ? "isn't" : "aren't")} in the expected result."
+            : $"{Rows(count)} in {Table} {(count == 1 ? "isn't" : "aren't")} expected.";
+
+        public string TheirColumns => Table is null ? "Your columns" : $"{Table}'s columns";
+        public string ExpectedColumns => Table is null ? "Expected columns" : $"Expected columns in {Table}";
     }
 
     private static ComparisonResult CompareOrder(
@@ -101,7 +127,7 @@ public static class ResultComparer
     }
 
     /// <summary>Returns a map from expected column index to actual column index, or an error message.</summary>
-    private static (int[]? Map, string? Error) AlignColumns(IReadOnlyList<string> expected, IReadOnlyList<string> actual, ColumnMatch mode)
+    private static (int[]? Map, string? Error) AlignColumns(IReadOnlyList<string> expected, IReadOnlyList<string> actual, ColumnMatch mode, Wording words)
     {
         if (mode == ColumnMatch.ByPosition)
         {
@@ -126,7 +152,7 @@ public static class ResultComparer
         var extra = actual.Where(c => IndexOf(expected, c) < 0).ToList();
         if (missing.Count > 0 || extra.Count > 0)
         {
-            var message = $"Expected columns: {List(expected)}. Your columns: {List(actual)}.";
+            var message = $"{words.ExpectedColumns}: {List(expected)}. {words.TheirColumns}: {List(actual)}.";
             if (missing.Count > 0)
                 message += $" Missing: {List(missing)}.";
             if (extra.Count > 0)

@@ -20,12 +20,17 @@ public sealed class Verifier(Checker checker)
         var problems = new List<string>();
         try
         {
-            var self = await checker.CheckAsync(question, question.SolutionSql, ct);
-            problems.AddRange(self.Errors.Select(e => $"Reference solution: {e}"));
-            problems.AddRange(self.RuleViolations.Select(v => $"Reference solution breaks its own rule: {v}"));
-            problems.AddRange(self.Datasets
-                .Where(d => d.Outcome != DatasetOutcome.Passed)
-                .Select(d => $"Reference solution doesn't match itself on '{d.Dataset}': {d.Message}"));
+            // The solution and every alternative must run cleanly and follow the question's rules.
+            foreach (var reference in question.Alternatives.Prepend(new NamedScript("solution", question.SolutionSql)))
+            {
+                var label = reference.Name == "solution" ? "Reference solution" : $"Alternative '{reference.Name}'";
+                var self = await checker.CheckAsync(question, reference.Sql, ct);
+                problems.AddRange(self.Errors.Select(e => $"{label}: {e}"));
+                problems.AddRange(self.RuleViolations.Select(v => $"{label} breaks the question's rule: {v}"));
+                problems.AddRange(self.Datasets
+                    .Where(d => d.Outcome != DatasetOutcome.Passed)
+                    .Select(d => $"{label} doesn't pass on '{d.Dataset}': {d.Message}"));
+            }
         }
         catch (QuestionConfigurationException ex)
         {

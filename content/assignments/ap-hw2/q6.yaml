@@ -1,0 +1,14 @@
+title: Change terms using a subquery
+kind: dml
+after: [q1]
+# The shifted data has different TermsID values, so the 2 in the question means something else there.
+datasets: [base, edge]
+prompt: |
+  Write an UPDATE statement that modifies the InvoiceCopy table. Change TermsID to 2
+  for each invoice that's from a vendor with a DefaultTermsID of 2. Use a subquery.
+rules:
+  require: [Subquery]
+hints:
+  edge: >-
+    The edge data has an invoice from a vendor whose DefaultTermsID is 2 but whose own
+    TermsID is 3. Your UPDATE should change it to 2.

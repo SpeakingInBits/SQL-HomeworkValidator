@@ -30,6 +30,15 @@ public sealed class DatabaseManager(ServerConnection server)
     /// <summary>The low-privilege database user student queries run as.</summary>
     public const string ReaderUser = "hv_reader";
 
+    /// <summary>The database user student DML scripts run as: read, write, and create or drop tables, in this database only.</summary>
+    public const string WriterUser = "hv_writer";
+
+    /// <summary>
+    /// Part of every database's version. Raise it when the way databases are built changes (such as a new database user),
+    /// so existing databases are rebuilt.
+    /// </summary>
+    private const int BuildVersion = 2;
+
     private const string ManagedProperty = "HV_Managed";
     private const string VersionProperty = "HV_ContentVersion";
 
@@ -82,6 +91,17 @@ public sealed class DatabaseManager(ServerConnection server)
         return true;
     }
 
+    /// <summary>Drops and rebuilds a database, e.g. after a student's COMMIT saved changes the validator meant to roll back.</summary>
+    public async Task RebuildAsync(CourseDatabase database, Dataset dataset, CancellationToken ct = default)
+    {
+        var status = await GetStatusAsync(database, dataset, ct);
+        if (status.State == DatabaseState.NotManaged)
+            return;
+        if (status.State != DatabaseState.Missing)
+            await DropAsync(status.Name, ct);
+        await CreateAsync(status.Name, database, dataset, ct);
+    }
+
     /// <summary>Drops every database the validator created. Returns their names.</summary>
     public async Task<IReadOnlyList<string>> DropAllAsync(CancellationToken ct = default)
     {
@@ -123,7 +143,9 @@ public sealed class DatabaseManager(ServerConnection server)
         await RunScriptAsync(connection, dataset.Sql, $"{database.Name} '{dataset.Name}' dataset", ct);
 
         await ExecuteAsync(connection,
-            $"CREATE USER {Quote(ReaderUser)} WITHOUT LOGIN; ALTER ROLE db_datareader ADD MEMBER {Quote(ReaderUser)};", ct);
+            $"CREATE USER {Quote(ReaderUser)} WITHOUT LOGIN; ALTER ROLE db_datareader ADD MEMBER {Quote(ReaderUser)}; " +
+            $"CREATE USER {Quote(WriterUser)} WITHOUT LOGIN; ALTER ROLE db_datareader ADD MEMBER {Quote(WriterUser)}; " +
+            $"ALTER ROLE db_datawriter ADD MEMBER {Quote(WriterUser)}; ALTER ROLE db_ddladmin ADD MEMBER {Quote(WriterUser)};", ct);
         await SetPropertyAsync(connection, VersionProperty, ContentVersion(database, dataset), ct);
     }
 
@@ -201,7 +223,8 @@ public sealed class DatabaseManager(ServerConnection server)
     /// <summary>A hash of the schema and dataset scripts, so a content change triggers a rebuild.</summary>
     private static string ContentVersion(CourseDatabase database, Dataset dataset)
     {
-        var bytes = Encoding.UTF8.GetBytes(database.SchemaSql.ReplaceLineEndings("\n") + "\n--dataset--\n" + dataset.Sql.ReplaceLineEndings("\n"));
+        var bytes = Encoding.UTF8.GetBytes(
+            $"build {BuildVersion}\n" + database.SchemaSql.ReplaceLineEndings("\n") + "\n--dataset--\n" + dataset.Sql.ReplaceLineEndings("\n"));
         return Convert.ToHexString(SHA256.HashData(bytes))[..16];
     }
 

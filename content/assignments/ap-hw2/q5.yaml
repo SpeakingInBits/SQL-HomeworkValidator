@@ -1,0 +1,18 @@
+title: Pay invoices with a balance due
+kind: dml
+after: [q1]
+prompt: |
+  Write an UPDATE statement that modifies the InvoiceCopy table. Change the
+  PaymentDate to today's date and the PaymentTotal to the balance due for each
+  invoice with a balance due. Set today's date with a literal date string, or use
+  the GETDATE() function.
+compare:
+  # Any date counts, since students may type a date or use GETDATE().
+  presenceOnly: [InvoiceCopy.PaymentDate]
+note: >-
+  Paying the balance due means the invoice is paid off: afterwards PaymentTotal includes what was
+  already paid plus the balance, so nothing is left owing.
+hints:
+  edge: >-
+    The edge data has invoices that are partly paid and one paid entirely by a credit. After your
+    UPDATE, InvoiceTotal - PaymentTotal - CreditTotal should be 0 for every invoice you paid.

@@ -22,9 +22,9 @@ public class ScriptAnalyzerTests
 
         Assert.True(result.IsRunnable);
         Assert.Single(result.Notes);
-        Assert.DoesNotContain("USE", result.ExecutableSql);
+        Assert.DoesNotContain("USE", result.Batches[0]);
         // The SELECT started on line 4, so three blank lines come first.
-        Assert.StartsWith("\n\n\nSELECT", result.ExecutableSql);
+        Assert.StartsWith("\n\n\nSELECT", result.Batches[0]);
     }
 
     [Fact]

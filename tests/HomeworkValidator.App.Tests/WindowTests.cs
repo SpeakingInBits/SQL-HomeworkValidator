@@ -55,7 +55,7 @@ public class WindowTests
             new ServerInfo("17.0.1000.7", "Developer Edition (64-bit)", true), new AnswerStore(TestAppBuilder.NewTempFolder()), () => { });
         viewModel.CurrentPage = workspace;
 
-        var question = workspace.Assignments[1].Questions[2]; // mgs-hw1/q3
+        var question = workspace.Assignments.SelectMany(a => a.Questions).Single(q => q.Question.Id == "mgs-hw1/q3");
         workspace.SelectedNode = question;
         question.Document.Text = "SELECT ProductName, ListPrice, DateAdded\nFROM Products\nWHERE ListPrice >= 500 AND ListPrice <= 2000\nORDER BY DateAdded DESC;";
         question.Result = new ResultViewModel(FailedReport(question.Question));

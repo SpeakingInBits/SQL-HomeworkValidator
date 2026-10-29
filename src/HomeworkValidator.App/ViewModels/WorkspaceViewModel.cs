@@ -29,7 +29,7 @@ public partial class WorkspaceViewModel : ViewModelBase
         _answers = answers;
         _changeConnection = changeConnection;
         _databases = new DatabaseManager(server);
-        _checker = new Checker(content, _databases, new QueryRunner(server)) { SampleSize = SampleSize };
+        _checker = new Checker(content, _databases, server) { SampleSize = SampleSize };
 
         ServerDescription = $"{server.Server} · SQL Server {info.Version} {info.Edition}";
         Assignments = new ObservableCollection<AssignmentViewModel>(

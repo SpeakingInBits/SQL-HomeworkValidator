@@ -36,41 +36,55 @@ public sealed class QueryRunner(ServerConnection server)
             if (reader.FieldCount == 0)
                 throw new QueryFailedException("The query didn't return a result set.");
 
-            var columns = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToList();
-            var rows = new List<object?[]>();
-            while (await reader.ReadAsync(ct))
-            {
-                if (rows.Count == MaxRows)
-                {
-                    command.Cancel();
-                    throw new QueryFailedException($"The query returned more than {MaxRows:N0} rows. Check your WHERE clause and joins.");
-                }
-
-                var values = new object?[reader.FieldCount];
-                reader.GetValues(values!);
-                for (var i = 0; i < values.Length; i++)
-                {
-                    if (values[i] is DBNull)
-                        values[i] = null;
-                }
-                rows.Add(values);
-            }
+            var result = await ReadAsync(reader, command, MaxRows,
+                $"The query returned more than {MaxRows:N0} rows. Check your WHERE clause and joins.", ct);
 
             if (await reader.NextResultAsync(ct))
                 throw new QueryFailedException("The query returned more than one result set.");
 
-            return new ResultTable(columns, rows);
-        }
-        catch (SqlException ex) when (ex.Number == -2)
-        {
-            throw new QueryFailedException($"The query took longer than {TimeoutSeconds} seconds and was stopped.");
+            return result;
         }
         catch (SqlException ex)
         {
-            var messages = ex.Errors.Cast<SqlError>()
-                .Select(e => e.LineNumber > 0 ? $"Line {e.LineNumber}: {e.Message}" : e.Message)
-                .Distinct();
-            throw new QueryFailedException(string.Join(Environment.NewLine, messages));
+            throw Describe(ex, TimeoutSeconds, "query");
         }
+    }
+
+    /// <summary>Reads the current result set, stopping with <paramref name="tooManyRows"/> past <paramref name="maxRows"/>.</summary>
+    internal static async Task<ResultTable> ReadAsync(SqlDataReader reader, SqlCommand command, int maxRows, string tooManyRows, CancellationToken ct)
+    {
+        var columns = Enumerable.Range(0, reader.FieldCount).Select(reader.GetName).ToList();
+        var rows = new List<object?[]>();
+        while (await reader.ReadAsync(ct))
+        {
+            if (rows.Count == maxRows)
+            {
+                command.Cancel();
+                throw new QueryFailedException(tooManyRows);
+            }
+
+            var values = new object?[reader.FieldCount];
+            reader.GetValues(values!);
+            for (var i = 0; i < values.Length; i++)
+            {
+                if (values[i] is DBNull)
+                    values[i] = null;
+            }
+            rows.Add(values);
+        }
+
+        return new ResultTable(columns, rows);
+    }
+
+    /// <summary>Turns a SqlException into a message for the student, with line numbers.</summary>
+    internal static QueryFailedException Describe(SqlException ex, int timeoutSeconds, string what)
+    {
+        if (ex.Number == -2)
+            return new QueryFailedException($"The {what} took longer than {timeoutSeconds} seconds and was stopped.");
+
+        var messages = ex.Errors.Cast<SqlError>()
+            .Select(e => e.LineNumber > 0 ? $"Line {e.LineNumber}: {e.Message}" : e.Message)
+            .Distinct();
+        return new QueryFailedException(string.Join(Environment.NewLine, messages));
     }
 }

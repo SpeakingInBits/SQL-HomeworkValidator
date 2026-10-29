@@ -2,7 +2,7 @@
 
 A cross-platform desktop app that lets students check their SQL Server homework against the instructor's solutions. Students connect it to their own SQL Server (a local install on Windows, Docker on macOS and Linux), and it compares their query results against the reference solution on several test datasets.
 
-Status: SELECT questions can be checked in the desktop app or with the command-line tool `hv`. See [PLAN.md](PLAN.md).
+Status: SELECT questions and INSERT/UPDATE/DELETE questions can be checked in the desktop app or with the command-line tool `hv`. See [PLAN.md](PLAN.md).
 
 ## Trying it
 

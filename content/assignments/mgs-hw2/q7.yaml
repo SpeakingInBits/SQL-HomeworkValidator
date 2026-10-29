@@ -1,0 +1,13 @@
+title: Add customer Rick Raven
+kind: dml
+prompt: |
+  Write an INSERT statement that adds this row to the Customers table:
+
+    EmailAddress:  rick@raven.com
+    Password:      Make this no password by using an empty string (just two single quotes: '')
+    FirstName:     Rick
+    LastName:      Raven
+
+  Use a column list for this statement.
+rules:
+  forbid: [InsertWithoutColumnList]

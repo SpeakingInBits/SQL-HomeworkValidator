@@ -1,5 +1,6 @@
 using HomeworkValidator.Core.Checking;
 using HomeworkValidator.Core.Comparison;
+using HomeworkValidator.Core.Content;
 
 namespace HomeworkValidator.App.ViewModels;
 
@@ -12,15 +13,19 @@ public class ResultViewModel : ViewModelBase
         Notes = report.Notes;
         Errors = report.Errors;
         RuleViolations = report.RuleViolations;
-        Datasets = report.Datasets.Select(d => new DatasetResultViewModel(d)).ToList();
+        Datasets = report.Datasets.Select(d => new DatasetResultViewModel(d, report.Question.Kind == QuestionKind.Dml)).ToList();
 
         Heading = Passed ? "Correct!" : "Not quite";
         Summary = (Errors.Count, Datasets.Count) switch
         {
             ( > 0, _) => "Your SQL couldn't be run. Fix the problem below and check again.",
             (_, 0) => "",
-            _ when Passed => $"Your query matches the expected result on all {Datasets.Count} datasets.",
-            _ => $"Your query matches the expected result on {Datasets.Count(d => d.IsPassed)} of {Datasets.Count} datasets.",
+            _ when Passed => report.Question.Kind == QuestionKind.Dml
+                ? $"Your script leaves every table as expected on all {Datasets.Count} datasets."
+                : $"Your query matches the expected result on all {Datasets.Count} datasets.",
+            _ => report.Question.Kind == QuestionKind.Dml
+                ? $"Your script leaves every table as expected on {Datasets.Count(d => d.IsPassed)} of {Datasets.Count} datasets."
+                : $"Your query matches the expected result on {Datasets.Count(d => d.IsPassed)} of {Datasets.Count} datasets.",
         };
     }
 
@@ -39,7 +44,8 @@ public class ResultViewModel : ViewModelBase
     public IReadOnlyList<DatasetResultViewModel> Datasets { get; }
 }
 
-public class DatasetResultViewModel(DatasetResult result) : ViewModelBase
+/// <param name="isScript">True for DML questions, where the student wrote a script that changes tables rather than a query.</param>
+public class DatasetResultViewModel(DatasetResult result, bool isScript = false) : ViewModelBase
 {
     public string Title => result.Dataset switch
     {
@@ -61,14 +67,17 @@ public class DatasetResultViewModel(DatasetResult result) : ViewModelBase
     public bool IsError => result.Outcome == DatasetOutcome.Error;
 
     /// <summary>Hidden when passed: "Matches the expected result" adds nothing next to PASS.</summary>
-    public string? Message => IsPassed ? null : IsError ? $"Your query failed to run: {result.Message}" : result.Message;
+    public string? Message => IsPassed ? null : IsError ? $"Your {(isScript ? "script" : "query")} failed to run: {result.Message}" : result.Message;
 
     public string? Hint => result.Hint;
     public RowSample? Missing => result.Comparison?.Missing;
     public RowSample? Unexpected => result.Comparison?.Unexpected;
 
-    public string? MissingHeading => Missing is null ? null : Heading("Missing from your result", Missing);
-    public string? UnexpectedHeading => Unexpected is null ? null : Heading("In your result but not expected", Unexpected);
+    public string? MissingHeading => Missing is null ? null : Heading(Table is null ? "Missing from your result" : $"Missing from {Table}", Missing);
+    public string? UnexpectedHeading => Unexpected is null ? null : Heading(Table is null ? "In your result but not expected" : $"In {Table} but not expected", Unexpected);
+
+    /// <summary>For DML questions, the table the rows come from.</summary>
+    private string? Table => result.Comparison?.Table;
 
     private static string Heading(string text, RowSample sample) =>
         sample.Total > sample.Rows.Count

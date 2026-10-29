@@ -1,0 +1,11 @@
+title: Delete the new category
+kind: dml
+after: [q1]
+datasets: [base, edge]
+prompt: |
+  Write a DELETE statement that deletes the row you added to the Categories table in
+  exercise 1. This statement should use the CategoryID column to identify the row.
+note: >-
+  In the validator's copy of the database, the Brass row from exercise 1 has CategoryID 5.
+  Your own database may have given it a different number if you ran exercise 1 more than
+  once; use 5 here.

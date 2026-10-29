@@ -1,0 +1,12 @@
+title: Create VendorCopy and InvoiceCopy
+kind: dml
+prompt: |
+  Write SELECT INTO statements to create two test tables named VendorCopy and
+  InvoiceCopy that are complete copies of the Vendors and Invoices tables. If
+  VendorCopy and InvoiceCopy already exist, first code two DROP TABLE statements to
+  delete them.
+note: >-
+  The validator's copy of the database already has old VendorCopy and InvoiceCopy tables,
+  so your script has to drop them before it creates new ones.
+rules:
+  require: [SelectInto]

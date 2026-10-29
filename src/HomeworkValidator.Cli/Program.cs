@@ -44,7 +44,7 @@ try
     var content = ContentLibrary.Load(contentRoot);
     var server = options.CreateConnection();
     var databases = new DatabaseManager(server);
-    var checker = new Checker(content, databases, new QueryRunner(server));
+    var checker = new Checker(content, databases, server);
     var output = new ConsoleOutput();
 
     return options.Command switch

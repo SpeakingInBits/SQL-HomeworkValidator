@@ -1,0 +1,5 @@
+title: Reset every password
+kind: dml
+prompt: |
+  Write an UPDATE statement that modifies the Customers table. Change the password
+  column to "reset" for every customer in the table.
