@@ -1,0 +1,7 @@
+title: Vendor contacts sorted by name
+prompt: |
+  Write a SELECT statement that returns three columns from the Vendors table:
+  VendorContactFName, VendorContactLName, and VendorName. Sort the result set by
+  last name, then by first name. (This should be answered with a single query.)
+compare:
+  order: [VendorContactLName, VendorContactFName]

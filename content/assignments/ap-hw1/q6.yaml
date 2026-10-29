@@ -1,0 +1,6 @@
+title: Contacts with last names starting with A, B, C or E
+prompt: |
+  Modify the solution to exercise 3 to filter for contacts whose last name begins
+  with the letter A, B, C, or E.
+compare:
+  order: [Full Name]

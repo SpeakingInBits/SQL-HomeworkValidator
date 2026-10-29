@@ -1,0 +1,14 @@
+title: Products priced between 500 and 2000
+prompt: |
+  Write a SELECT statement that returns these column names and data from the
+  Products table:
+
+    ProductName  The ProductName column
+    ListPrice    The ListPrice column
+    DateAdded    The DateAdded column
+
+  Return only the rows with a list price that's greater than 500 and less than 2000.
+
+  Sort the result set in descending sequence by the DateAdded column.
+compare:
+  order: [DateAdded]
