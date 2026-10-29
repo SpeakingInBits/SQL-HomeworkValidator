@@ -22,6 +22,12 @@ public enum QuestionKind
 
     /// <summary>A script that changes data (INSERT, UPDATE, DELETE, SELECT INTO, DROP TABLE); the resulting tables are compared.</summary>
     Dml,
+
+    /// <summary>
+    /// A script that changes the database's design (CREATE/ALTER TABLE, indexes, constraints). The resulting schema is compared,
+    /// then the question's probes show whether constraints and defaults behave the same.
+    /// </summary>
+    Ddl,
 }
 
 public sealed record Question(
@@ -45,11 +51,20 @@ public sealed record Question(
     /// <summary>Other correct answers, for questions that can reasonably be read more than one way.</summary>
     public IReadOnlyList<NamedScript> Alternatives { get; init; } = [];
 
-    /// <summary>DML only: IDs of earlier questions whose reference solutions run first, e.g. the one that creates VendorCopy.</summary>
+    /// <summary>DML and DDL: IDs of earlier questions whose reference solutions run first, e.g. the one that creates VendorCopy.</summary>
     public IReadOnlyList<string> After { get; init; } = [];
 
-    /// <summary>DML only: SQL that runs after <see cref="After"/> and before the answer (q&lt;n&gt;.setup.sql).</summary>
+    /// <summary>DML and DDL: SQL that runs after <see cref="After"/> and before the answer (q&lt;n&gt;.setup.sql).</summary>
     public string? SetupSql { get; init; }
+
+    /// <summary>
+    /// DDL only: small scripts run against both the expected design and the student's, such as "insert a group with
+    /// negative dues". Whether each succeeds, and what it returns, must match.
+    /// </summary>
+    public IReadOnlyList<NamedScript> Probes { get; init; } = [];
+
+    /// <summary>True for questions where the student writes a script that changes the database, not a query.</summary>
+    public bool IsScript => Kind != QuestionKind.Select;
 }
 
 /// <summary>A named script: a known-wrong answer (mutant) or an alternative correct answer.</summary>
@@ -84,6 +99,12 @@ public sealed record CompareOptions(ColumnMatch Columns, IReadOnlyList<OrderKey>
 
     public IReadOnlyList<string> PresenceOnly { get; init; } = [];
 
+    /// <summary>DDL only: varchar(50) and varchar(100) count as the same type, for designs that don't give lengths.</summary>
+    public bool IgnoreLengths { get; init; }
+
+    /// <summary>DDL only: don't compare which columns allow NULLs, for questions that leave it to the student.</summary>
+    public bool IgnoreNullability { get; init; }
+
     public bool Ordered => Order.Count > 0;
 }
 
@@ -116,6 +137,9 @@ public enum SqlFeature
 
     /// <summary>An INSERT that doesn't list its columns, e.g. <c>INSERT INTO Categories VALUES ('Brass')</c>.</summary>
     InsertWithoutColumnList,
+
+    /// <summary><c>CREATE DATABASE</c> for the question's database. It's recognized but never run.</summary>
+    CreateDatabase,
 }
 
 public sealed class ContentException(string message) : Exception(message);

@@ -2,7 +2,7 @@
 
 A cross-platform desktop app that lets students check their SQL Server homework against the instructor's solutions. Students connect it to their own SQL Server (a local install on Windows, Docker on macOS and Linux), and it compares their query results against the reference solution on several test datasets.
 
-Status: SELECT questions and INSERT/UPDATE/DELETE questions can be checked in the desktop app or with the command-line tool `hv`. See [PLAN.md](PLAN.md).
+Status: SELECT, INSERT/UPDATE/DELETE and database scripting (CREATE/ALTER TABLE, indexes, constraints) questions can be checked in the desktop app or with the command-line tool `hv`. See [PLAN.md](PLAN.md).
 
 ## Trying it
 
@@ -21,7 +21,7 @@ Connect to your server, pick a question, write a query and press F5 (or Check). 
 ```bash
 dotnet build
 cd src/HomeworkValidator.Cli/bin/Debug/net10.0
-./hv setup                              # creates HV_AP_base, HV_AP_edge, HV_AP_shifted and the same for MyGuitarShop
+./hv setup                              # creates HV_AP_base/_edge/_shifted, the same for MyGuitarShop, and HV_Membership_base
 ./hv list                               # assignments and question IDs
 ./hv show ap-hw1/q2                     # print a question
 ./hv check ap-hw1/q2 my-answer.sql      # check an answer

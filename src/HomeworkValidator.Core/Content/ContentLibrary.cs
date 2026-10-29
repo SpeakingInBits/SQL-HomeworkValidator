@@ -150,7 +150,7 @@ public sealed partial class ContentLibrary
             var questions = Directory.GetFiles(assignmentDir, "q*.yaml")
                 .Select(path => (path, number: ParseQuestionNumber(path)))
                 .OrderBy(x => x.number)
-                .Select(x => LoadQuestion(x.path, x.number, id, database))
+                .Select(x => LoadQuestion(x.path, x.number, id, database, databases))
                 .ToList();
 
             var assignment = new Assignment(id, Required(manifest.Title, manifestPath, "title"), database.Name, questions);
@@ -161,7 +161,7 @@ public sealed partial class ContentLibrary
         return result;
     }
 
-    private static Question LoadQuestion(string path, int number, string assignmentId, CourseDatabase database)
+    private static Question LoadQuestion(string path, int number, string assignmentId, CourseDatabase assignmentDatabase, List<CourseDatabase> databases)
     {
         var yaml = Deserialize<QuestionYaml>(path);
         var stem = Path.Combine(Path.GetDirectoryName(path)!, Path.GetFileNameWithoutExtension(path));
@@ -171,8 +171,20 @@ public sealed partial class ContentLibrary
             throw new ContentException($"{path}: reference solution {Path.GetFileName(solutionPath)} is missing.");
 
         var kind = ParseEnum<QuestionKind>(yaml.Kind ?? "select", path, "kind");
-        if (kind != QuestionKind.Dml && (yaml.After is not null || File.Exists(stem + ".setup.sql")))
-            throw new ContentException($"{path}: 'after' and setup scripts are only for kind: dml questions.");
+        if (kind == QuestionKind.Select && (yaml.After is not null || File.Exists(stem + ".setup.sql")))
+            throw new ContentException($"{path}: 'after' and setup scripts are only for kind: dml and ddl questions.");
+        if (kind != QuestionKind.Ddl && yaml.Probes is not null)
+            throw new ContentException($"{path}: probes are only for kind: ddl questions.");
+
+        // A question can use a different database than the rest of its assignment (e.g. one AP exercise in a Membership homework).
+        var database = yaml.Database is null
+            ? assignmentDatabase
+            : databases.FirstOrDefault(d => d.Name.Equals(yaml.Database, StringComparison.OrdinalIgnoreCase))
+              ?? throw new ContentException($"{path}: unknown database '{yaml.Database}'.");
+
+        var probes = (yaml.Probes ?? []).Select((p, i) => new NamedScript(
+            Required(p.Name, path, $"probes[{i}].name"),
+            Required(p.Sql, path, $"probes[{i}].sql"))).ToList();
 
         var after = (yaml.After ?? []).Select(name =>
         {
@@ -211,6 +223,7 @@ public sealed partial class ContentLibrary
             Alternatives = ReadScripts(stem + ".alternatives"),
             After = after,
             SetupSql = File.Exists(stem + ".setup.sql") ? File.ReadAllText(stem + ".setup.sql") : null,
+            Probes = probes,
         };
     }
 
@@ -223,7 +236,10 @@ public sealed partial class ContentLibrary
                 .ToList()
             : [];
 
-    /// <summary>A question's 'after' list must name DML questions, since their solutions set up its starting state.</summary>
+    /// <summary>
+    /// A question's 'after' list must name DML or DDL questions on the same database, since their solutions set up
+    /// its starting state.
+    /// </summary>
     private static void CheckAfterReferences(Assignment assignment, string dir)
     {
         foreach (var question in assignment.Questions)
@@ -232,8 +248,10 @@ public sealed partial class ContentLibrary
             {
                 var earlier = assignment.Questions.FirstOrDefault(q => q.Id == id)
                     ?? throw new ContentException($"{dir}: {question.Id} runs after {id}, which doesn't exist.");
-                if (earlier.Kind != QuestionKind.Dml)
-                    throw new ContentException($"{dir}: {question.Id} runs after {id}, which isn't a kind: dml question.");
+                if (!earlier.IsScript)
+                    throw new ContentException($"{dir}: {question.Id} runs after {id}, which isn't a kind: dml or ddl question.");
+                if (!earlier.Database.Equals(question.Database, StringComparison.OrdinalIgnoreCase))
+                    throw new ContentException($"{dir}: {question.Id} runs after {id}, which uses a different database.");
             }
         }
     }
@@ -243,10 +261,12 @@ public sealed partial class ContentLibrary
         if (yaml is null)
             return CompareOptions.Default;
 
-        if (kind == QuestionKind.Dml && (yaml.Columns is not null || yaml.Order is not null))
-            throw new ContentException($"{path}: DML questions compare whole tables, so compare.columns and compare.order don't apply.");
-        if (kind != QuestionKind.Dml && yaml.PresenceOnly is not null)
-            throw new ContentException($"{path}: compare.presenceOnly is only for kind: dml questions.");
+        if (kind != QuestionKind.Select && (yaml.Columns is not null || yaml.Order is not null))
+            throw new ContentException($"{path}: DML and DDL questions compare whole tables, so compare.columns and compare.order don't apply.");
+        if (kind == QuestionKind.Select && yaml.PresenceOnly is not null)
+            throw new ContentException($"{path}: compare.presenceOnly is only for kind: dml and ddl questions.");
+        if (kind != QuestionKind.Ddl && (yaml.IgnoreLengths is not null || yaml.IgnoreNullability is not null))
+            throw new ContentException($"{path}: compare.ignoreLengths and compare.ignoreNullability are only for kind: ddl questions.");
         foreach (var name in (yaml.PresenceOnly ?? []).Where(n => n.Split('.').Length != 2))
             throw new ContentException($"{path}: compare.presenceOnly entries look like Table.Column, not '{name}'.");
 
@@ -282,7 +302,12 @@ public sealed partial class ContentLibrary
         if (columns == ColumnMatch.RowCount && order.Count > 0)
             throw new ContentException($"{path}: compare.order can't be used with columns: row-count.");
 
-        return new CompareOptions(columns, order, yaml.Decimals) { PresenceOnly = yaml.PresenceOnly ?? [] };
+        return new CompareOptions(columns, order, yaml.Decimals)
+        {
+            PresenceOnly = yaml.PresenceOnly ?? [],
+            IgnoreLengths = yaml.IgnoreLengths ?? false,
+            IgnoreNullability = yaml.IgnoreNullability ?? false,
+        };
     }
 
     private static HashSet<SqlFeature> ParseFeatures(List<string>? names, string path) =>
@@ -345,6 +370,8 @@ public sealed partial class ContentLibrary
         public Dictionary<string, string>? Hints { get; set; }
         public string? Note { get; set; }
         public List<string>? After { get; set; }
+        public string? Database { get; set; }
+        public List<ProbeYaml>? Probes { get; set; }
     }
 
     private sealed class CompareYaml
@@ -353,6 +380,14 @@ public sealed partial class ContentLibrary
         public List<object>? Order { get; set; }
         public int? Decimals { get; set; }
         public List<string>? PresenceOnly { get; set; }
+        public bool? IgnoreLengths { get; set; }
+        public bool? IgnoreNullability { get; set; }
+    }
+
+    private sealed class ProbeYaml
+    {
+        public string? Name { get; set; }
+        public string? Sql { get; set; }
     }
 
     private sealed class RulesYaml

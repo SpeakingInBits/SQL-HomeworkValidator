@@ -1,0 +1,2 @@
+ALTER TABLE Individuals
+ADD DuesPaid int NOT NULL DEFAULT 0;

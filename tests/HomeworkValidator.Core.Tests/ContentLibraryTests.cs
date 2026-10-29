@@ -156,6 +156,6 @@ public sealed class ContentLibraryTests : IDisposable
         WriteDmlQuestion(2, "after: [q1]");
 
         var ex = Assert.Throws<ContentException>(() => ContentLibrary.Load(_root));
-        Assert.Contains("isn't a kind: dml question", ex.Message);
+        Assert.Contains("isn't a kind: dml or ddl question", ex.Message);
     }
 }

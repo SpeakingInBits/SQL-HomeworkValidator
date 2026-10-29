@@ -1,0 +1,6 @@
+title: Index GroupMembership
+kind: ddl
+after: [q2]
+prompt: |
+  Write the CREATE INDEX statements to create a clustered index on the GroupID column and
+  a nonclustered index on the IndividualID column of the GroupMembership table.

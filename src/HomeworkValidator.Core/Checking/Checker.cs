@@ -44,7 +44,7 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, S
 
     public async Task<CheckReport> CheckAsync(Question question, string studentSql, CancellationToken ct = default)
     {
-        var analysis = ScriptAnalyzer.Analyze(studentSql, question.Kind);
+        var analysis = ScriptAnalyzer.Analyze(studentSql, question.Kind, question.Database);
         var violations = ScriptAnalyzer.CheckRules(analysis.Features, question.Rules);
 
         if (!analysis.IsRunnable)
@@ -62,8 +62,8 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, S
             ComparisonResult comparison;
             try
             {
-                comparison = question.Kind == QuestionKind.Dml
-                    ? await CheckDmlAsync(question, database, dataset, analysis.Batches, notes, ct)
+                comparison = question.IsScript
+                    ? await CheckScriptAsync(question, database, dataset, analysis.Batches, notes, ct)
                     : await CheckSelectAsync(question, dataset, DatabaseManager.DatabaseName(database, dataset), analysis.Batches[0], ct);
             }
             catch (QueryFailedException ex)
@@ -102,16 +102,18 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, S
         return first!;
     }
 
-    private async Task<ComparisonResult> CheckDmlAsync(
+    private async Task<ComparisonResult> CheckScriptAsync(
         Question question, CourseDatabase database, Dataset dataset, IReadOnlyList<string> script, List<string> notes, CancellationToken ct)
     {
         var dbName = DatabaseManager.DatabaseName(database, dataset);
         var setup = SetupBatches(question);
+        // DDL questions also capture the design and run the probes; for DML only the data matters.
+        var probes = question.Kind == QuestionKind.Ddl ? question.Probes.Select(p => (p.Name, p.Sql)).ToList() : null;
 
         ScriptRun actual;
         try
         {
-            actual = await _scripts.RunAsync(dbName, setup, script, restricted: true, ct);
+            actual = await _scripts.RunAsync(dbName, setup, script, restricted: true, ct, probes);
         }
         catch (InvalidOperationException ex)
         {
@@ -133,8 +135,7 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, S
             {
                 try
                 {
-                    var run = await _scripts.RunAsync(dbName, setup, ReferenceBatches(question, reference), restricted: false, ct);
-                    return run.Snapshot;
+                    return await _scripts.RunAsync(dbName, setup, ReferenceBatches(question, reference), restricted: false, ct, probes);
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -142,7 +143,7 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, S
                 }
             });
 
-            var comparison = Compare(question, () => StateComparer.Compare(expected, actual.Snapshot, question.Compare, SampleSize));
+            var comparison = Compare(question, () => CompareRuns(question, expected, actual));
             if (comparison.Passed)
                 return comparison;
             first ??= comparison;
@@ -152,7 +153,30 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, S
     }
 
     /// <summary>
-    /// The batches that set up a DML question's starting state: the reference solutions of the questions it runs after
+    /// DDL: the design first, then how it behaves (probes), then the data. DML: the data.
+    /// Each step only runs if the previous one matched, so the student sees the most basic difference first.
+    /// </summary>
+    private ComparisonResult CompareRuns(Question question, ScriptRun expected, ScriptRun actual)
+    {
+        if (question.Kind == QuestionKind.Ddl)
+        {
+            var schema = SchemaComparer.Compare(expected.Schema!, actual.Schema!, question.Compare);
+            if (!schema.Passed)
+                return schema;
+
+            var probes = ProbeComparer.Compare(expected.Probes, actual.Probes, SampleSize);
+            if (!probes.Passed)
+                return probes;
+        }
+
+        var data = StateComparer.Compare(expected.Snapshot, actual.Snapshot, question.Compare, SampleSize);
+        return data.Passed && question.Kind == QuestionKind.Ddl
+            ? new ComparisonResult(true, "The design and its behavior match the expected ones.")
+            : data;
+    }
+
+    /// <summary>
+    /// The batches that set up a DML or DDL question's starting state: the reference solutions of the questions it runs after
     /// (and of the ones those run after), then its own setup script.
     /// </summary>
     private IReadOnlyList<string> SetupBatches(Question question)
@@ -186,7 +210,7 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, S
 
     private static IReadOnlyList<string> ReferenceBatches(Question question, NamedScript reference)
     {
-        var analysis = ScriptAnalyzer.Analyze(reference.Sql, question.Kind);
+        var analysis = ScriptAnalyzer.Analyze(reference.Sql, question.Kind, question.Database);
         if (!analysis.IsRunnable)
             throw new QuestionConfigurationException($"{question.Id}: the reference {reference.Name} isn't valid: {string.Join(" ", analysis.Errors)}");
         return analysis.Batches;

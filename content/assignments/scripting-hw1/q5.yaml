@@ -1,0 +1,44 @@
+title: Add check constraints to Invoices
+kind: ddl
+database: AP
+# The shifted data only moves IDs; the course and edge data cover these rules.
+datasets: [base, edge]
+prompt: |
+  Write an ALTER TABLE statement that adds two new check constraints to the Invoices table
+  of the AP database. The first should allow (1) PaymentDate to be null only if PaymentTotal
+  is zero and (2) PaymentDate to be not null only if PaymentTotal is greater than zero. The
+  second constraint should prevent the sum of PaymentTotal and CreditTotal from being
+  greater than InvoiceTotal.
+
+  NOTE: You may have invalid data in your table; you can use the WITH NOCHECK option to
+  ignore existing data in the table.
+hints:
+  edge: >-
+    The edge data has invoices that already break the first rule, such as one paid entirely
+    by a credit (a payment date but no payment). Use WITH NOCHECK so SQL Server doesn't check
+    existing rows when it adds the constraints.
+probes:
+  - name: Adding an unpaid invoice with no payment date
+    sql: |
+      INSERT Invoices (VendorID, InvoiceNumber, InvoiceDate, InvoiceTotal, PaymentTotal, CreditTotal, TermsID, InvoiceDueDate, PaymentDate)
+      SELECT MIN(VendorID), 'PROBE-1', '2023-03-01', 100, 0, 0, (SELECT MIN(TermsID) FROM Terms), '2023-04-01', NULL FROM Vendors;
+  - name: Adding an invoice with a payment date but no payment
+    sql: |
+      INSERT Invoices (VendorID, InvoiceNumber, InvoiceDate, InvoiceTotal, PaymentTotal, CreditTotal, TermsID, InvoiceDueDate, PaymentDate)
+      SELECT MIN(VendorID), 'PROBE-2', '2023-03-01', 100, 0, 0, (SELECT MIN(TermsID) FROM Terms), '2023-04-01', '2023-03-15' FROM Vendors;
+  - name: Adding an invoice with a payment but no payment date
+    sql: |
+      INSERT Invoices (VendorID, InvoiceNumber, InvoiceDate, InvoiceTotal, PaymentTotal, CreditTotal, TermsID, InvoiceDueDate, PaymentDate)
+      SELECT MIN(VendorID), 'PROBE-3', '2023-03-01', 100, 50, 0, (SELECT MIN(TermsID) FROM Terms), '2023-04-01', NULL FROM Vendors;
+  - name: Adding a paid invoice with its payment date
+    sql: |
+      INSERT Invoices (VendorID, InvoiceNumber, InvoiceDate, InvoiceTotal, PaymentTotal, CreditTotal, TermsID, InvoiceDueDate, PaymentDate)
+      SELECT MIN(VendorID), 'PROBE-4', '2023-03-01', 100, 100, 0, (SELECT MIN(TermsID) FROM Terms), '2023-04-01', '2023-03-15' FROM Vendors;
+  - name: Adding an invoice whose payments and credits add up to exactly its total
+    sql: |
+      INSERT Invoices (VendorID, InvoiceNumber, InvoiceDate, InvoiceTotal, PaymentTotal, CreditTotal, TermsID, InvoiceDueDate, PaymentDate)
+      SELECT MIN(VendorID), 'PROBE-5', '2023-03-01', 100, 70, 30, (SELECT MIN(TermsID) FROM Terms), '2023-04-01', '2023-03-15' FROM Vendors;
+  - name: Adding an invoice whose payments and credits add up to more than its total
+    sql: |
+      INSERT Invoices (VendorID, InvoiceNumber, InvoiceDate, InvoiceTotal, PaymentTotal, CreditTotal, TermsID, InvoiceDueDate, PaymentDate)
+      SELECT MIN(VendorID), 'PROBE-6', '2023-03-01', 100, 80, 30, (SELECT MIN(TermsID) FROM Terms), '2023-04-01', '2023-03-15' FROM Vendors;

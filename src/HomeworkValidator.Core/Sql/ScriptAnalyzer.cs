@@ -16,15 +16,20 @@ public sealed record ScriptAnalysis(
     IReadOnlySet<SqlFeature> Features,
     IReadOnlyList<string> Batches)
 {
-    public bool IsRunnable => Errors.Count == 0 && Batches.Count > 0;
+    /// <summary>True when everything in a DDL script was skipped (e.g. only CREATE DATABASE): nothing runs, but rules still apply.</summary>
+    public bool NothingToRun { get; init; }
+
+    public bool IsRunnable => Errors.Count == 0 && (Batches.Count > 0 || NothingToRun);
 }
 
 /// <summary>Parses T-SQL with ScriptDom, enforces which statements a question kind allows, and detects features for rules.</summary>
 public static class ScriptAnalyzer
 {
-    public static ScriptAnalysis Analyze(string sql, QuestionKind kind) => kind switch
+    /// <param name="database">The question's database. DDL scripts may create, drop or USE it; those statements are skipped.</param>
+    public static ScriptAnalysis Analyze(string sql, QuestionKind kind, string? database = null) => kind switch
     {
-        QuestionKind.Dml => AnalyzeDml(sql),
+        QuestionKind.Dml => AnalyzeScript(sql, ddl: false, database),
+        QuestionKind.Ddl => AnalyzeScript(sql, ddl: true, database),
         _ => AnalyzeSelect(sql),
     };
 
@@ -85,64 +90,142 @@ public static class ScriptAnalyzer
     /// outside the validator's database (EXEC, database statements, database names) is refused.
     /// USE statements are blanked out so the script runs against the validator's copy.
     /// </summary>
-    public static ScriptAnalysis AnalyzeDml(string sql)
+    public static ScriptAnalysis AnalyzeDml(string sql) => AnalyzeScript(sql, ddl: false, database: null);
+
+    /// <summary>
+    /// Analyzes a script for a DDL question: everything a DML script may do, plus creating, altering and dropping
+    /// tables, indexes, views, procedures and functions.
+    /// </summary>
+    /// <remarks>
+    /// Database-level statements are never run. CREATE, ALTER or DROP DATABASE for the question's own database
+    /// (including an IF around them, such as <c>IF DB_ID('Membership') IS NOT NULL DROP DATABASE Membership</c>)
+    /// and every USE are blanked out with a note; the rest of the script runs in the validator's copy of that database.
+    /// A database statement naming any other database is refused.
+    /// </remarks>
+    public static ScriptAnalysis AnalyzeDdl(string sql, string database) => AnalyzeScript(sql, ddl: true, database);
+
+    private static ScriptAnalysis AnalyzeScript(string sql, bool ddl, string? database)
     {
         if (Parse(sql) is not { } script)
             return SyntaxErrors(sql);
 
-        var problems = new List<string>();
-        var notes = new List<string>();
-        var visitor = new FeatureVisitor();
-        var uses = new List<UseStatement>();
-
+        var context = new ScriptContext(sql, ddl, database);
         foreach (var statement in script.Batches.SelectMany(b => b.Statements))
-            CheckDmlStatement(statement, problems, uses);
+            context.Check(statement);
 
+        var visitor = new FeatureVisitor();
         script.Accept(visitor);
-        problems.AddRange(QualifiedNameProblems(sql, visitor));
-        notes.AddRange(uses.Select(UseNote));
+        var features = visitor.Features;
+        if (context.CreatesDatabase)
+            features.Add(SqlFeature.CreateDatabase);
 
-        var hasWork = script.Batches.SelectMany(b => b.Statements).Any(s => s is not UseStatement);
-        if (!hasWork && problems.Count == 0)
+        var problems = context.Problems.Concat(QualifiedNameProblems(sql, visitor)).ToList();
+        var toRun = script.Batches.Where(b => b.Statements.Any(s => !context.Skipped.Contains(s))).ToList();
+        if (toRun.Count == 0 && context.Skipped.Count == 0 && problems.Count == 0)
             problems.Add("No SQL statements found.");
 
         if (problems.Count > 0)
-            return new ScriptAnalysis(problems, notes, visitor.Features, []);
+            return new ScriptAnalysis(problems, context.Notes, features, []);
 
-        var batches = script.Batches
-            .Where(b => b.Statements.Any(s => s is not UseStatement))
-            .Select(b => Pad(b.StartLine) + Blank(Text(sql, b), b.StartOffset, uses))
-            .ToList();
-        return new ScriptAnalysis([], notes, visitor.Features, batches);
+        var batches = toRun.Select(b => Pad(b.StartLine) + Blank(Text(sql, b), b.StartOffset, context.Skipped)).ToList();
+        // A DDL script may consist only of skipped statements, e.g. just CREATE DATABASE Membership.
+        return new ScriptAnalysis([], context.Notes, features, batches) { NothingToRun = batches.Count == 0 };
     }
 
-    private static void CheckDmlStatement(TSqlStatement statement, List<string> problems, List<UseStatement> uses)
+    /// <summary>Walks a script's statements, deciding which are allowed, which are skipped and which are refused.</summary>
+    private sealed class ScriptContext(string sql, bool ddl, string? database)
     {
-        switch (statement)
+        public List<string> Problems { get; } = [];
+        public List<string> Notes { get; } = [];
+        public List<TSqlStatement> Skipped { get; } = [];
+        public bool CreatesDatabase { get; private set; }
+
+        public void Check(TSqlStatement statement)
         {
-            case UseStatement use:
-                uses.Add(use);
-                break;
-            case IfStatement ifStatement:
-                CheckDmlStatement(ifStatement.ThenStatement, problems, uses);
-                if (ifStatement.ElseStatement is not null)
-                    CheckDmlStatement(ifStatement.ElseStatement, problems, uses);
-                break;
-            case BeginEndBlockStatement block:
-                foreach (var inner in block.StatementList.Statements)
-                    CheckDmlStatement(inner, problems, uses);
-                break;
-            case InsertStatement or UpdateStatement or DeleteStatement or MergeStatement or SelectStatement
-                or DropTableStatement or TruncateTableStatement or CreateTableStatement
-                or DeclareVariableStatement or SetVariableStatement or PrintStatement
-                or PredicateSetStatement or SetIdentityInsertStatement
-                or BeginTransactionStatement or CommitTransactionStatement or RollbackTransactionStatement or SaveTransactionStatement:
-                break;
-            default:
-                problems.Add($"Line {statement.StartLine}: {Describe(statement)} isn't allowed here. " +
-                             "Use INSERT, UPDATE, DELETE, SELECT and DROP TABLE statements.");
-                break;
+            switch (statement)
+            {
+                case UseStatement use:
+                    Skipped.Add(use);
+                    Notes.Add(UseNote(use));
+                    break;
+                case CreateDatabaseStatement create when ddl:
+                    if (IsOwnDatabase(create.DatabaseName))
+                    {
+                        CreatesDatabase = true;
+                        Skip(create);
+                    }
+                    else
+                    {
+                        WrongDatabase(create, create.DatabaseName.Value);
+                    }
+                    break;
+                case DropDatabaseStatement drop when ddl:
+                    if (drop.Databases.All(IsOwnDatabase))
+                        Skip(drop);
+                    else
+                        WrongDatabase(drop, string.Join(", ", drop.Databases.Select(d => d.Value)));
+                    break;
+                case AlterDatabaseStatement alter when ddl:
+                    if (alter.DatabaseName is not null && IsOwnDatabase(alter.DatabaseName))
+                        Skip(alter);
+                    else
+                        WrongDatabase(alter, alter.DatabaseName?.Value ?? "the current database");
+                    break;
+                case IfStatement ifStatement:
+                    Check(ifStatement.ThenStatement);
+                    if (ifStatement.ElseStatement is not null)
+                        Check(ifStatement.ElseStatement);
+                    // IF DB_ID('Membership') IS NOT NULL DROP DATABASE Membership: skip the IF along with what it guards.
+                    if (IsSkipped(ifStatement.ThenStatement) && (ifStatement.ElseStatement is null || IsSkipped(ifStatement.ElseStatement)))
+                        Skipped.Add(ifStatement);
+                    break;
+                case BeginEndBlockStatement block:
+                    foreach (var inner in block.StatementList.Statements)
+                        Check(inner);
+                    if (block.StatementList.Statements.All(IsSkipped))
+                        Skipped.Add(block);
+                    break;
+                case var _ when IsDmlStatement(statement) || (ddl && IsDdlStatement(statement)):
+                    break;
+                default:
+                    Problems.Add($"Line {statement.StartLine}: {Describe(statement)} isn't allowed here. " +
+                                 (ddl
+                                     ? "Use CREATE, ALTER and DROP TABLE, CREATE INDEX, and INSERT, UPDATE and DELETE statements."
+                                     : "Use INSERT, UPDATE, DELETE, SELECT and DROP TABLE statements."));
+                    break;
+            }
         }
+
+        private bool IsSkipped(TSqlStatement statement) => Skipped.Contains(statement);
+
+        private bool IsOwnDatabase(Identifier name) =>
+            database is not null && name.Value.Equals(database, StringComparison.OrdinalIgnoreCase);
+
+        private void Skip(TSqlStatement statement)
+        {
+            Skipped.Add(statement);
+            var text = Text(sql, statement).ReplaceLineEndings(" ").Trim().TrimEnd(';');
+            Notes.Add($"Skipped '{text}': the validator never creates or drops databases. " +
+                      $"It runs the rest of your script in its own copy of the {database} database.");
+        }
+
+        private void WrongDatabase(TSqlStatement statement, string name) =>
+            Problems.Add($"Line {statement.StartLine}: this script works on database {name}, but this question uses the {database} database.");
+
+        private static bool IsDmlStatement(TSqlStatement statement) => statement is
+            InsertStatement or UpdateStatement or DeleteStatement or MergeStatement or SelectStatement
+            or DropTableStatement or TruncateTableStatement or CreateTableStatement
+            or DeclareVariableStatement or SetVariableStatement or PrintStatement
+            or PredicateSetStatement or SetIdentityInsertStatement
+            or BeginTransactionStatement or CommitTransactionStatement or RollbackTransactionStatement or SaveTransactionStatement;
+
+        // ALTER TABLE comes in many shapes (ADD, ALTER COLUMN, DROP, CHECK CONSTRAINT...), each its own ScriptDom class.
+        private static bool IsDdlStatement(TSqlStatement statement) =>
+            statement.GetType().Name.StartsWith("AlterTable", StringComparison.Ordinal)
+            || statement is CreateIndexStatement or DropIndexStatement or AlterIndexStatement
+                or CreateViewStatement or AlterViewStatement or CreateOrAlterViewStatement or DropViewStatement
+                or CreateProcedureStatement or AlterProcedureStatement or CreateOrAlterProcedureStatement or DropProcedureStatement
+                or CreateFunctionStatement or AlterFunctionStatement or CreateOrAlterFunctionStatement or DropFunctionStatement;
     }
 
     /// <summary>Returns rule violations for the detected features.</summary>
@@ -171,6 +254,7 @@ public static class ScriptAnalyzer
         SqlFeature.AliasWithoutAs => "column aliases without the AS keyword (write 'expression AS Alias')",
         SqlFeature.SelectInto => "SELECT INTO",
         SqlFeature.InsertWithoutColumnList => "an INSERT without a column list (list the columns: INSERT INTO Table (Column1, Column2) ...)",
+        SqlFeature.CreateDatabase => "a CREATE DATABASE statement for this question's database",
         _ => feature.ToString(),
     };
 
@@ -212,13 +296,13 @@ public static class ScriptAnalyzer
 
     private static string Pad(int startLine) => new('\n', startLine - 1);
 
-    /// <summary>Replaces the USE statements inside a batch with spaces, keeping line breaks so line numbers don't move.</summary>
-    private static string Blank(string batch, int batchOffset, List<UseStatement> uses)
+    /// <summary>Replaces skipped statements (USE, database statements) inside a batch with spaces, keeping line breaks so line numbers don't move.</summary>
+    private static string Blank(string batch, int batchOffset, IEnumerable<TSqlStatement> statements)
     {
         var text = new StringBuilder(batch);
-        foreach (var use in uses.Where(u => u.StartOffset >= batchOffset && u.StartOffset < batchOffset + batch.Length))
+        foreach (var statement in statements.Where(s => s.StartOffset >= batchOffset && s.StartOffset < batchOffset + batch.Length))
         {
-            for (var i = use.StartOffset - batchOffset; i < use.StartOffset - batchOffset + use.FragmentLength; i++)
+            for (var i = statement.StartOffset - batchOffset; i < statement.StartOffset - batchOffset + statement.FragmentLength; i++)
             {
                 if (text[i] is not ('\r' or '\n'))
                     text[i] = ' ';

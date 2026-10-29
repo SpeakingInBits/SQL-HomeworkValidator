@@ -13,21 +13,26 @@ public class ResultViewModel : ViewModelBase
         Notes = report.Notes;
         Errors = report.Errors;
         RuleViolations = report.RuleViolations;
-        Datasets = report.Datasets.Select(d => new DatasetResultViewModel(d, report.Question.Kind == QuestionKind.Dml)).ToList();
+        Datasets = report.Datasets.Select(d => new DatasetResultViewModel(d, report.Question.IsScript)).ToList();
 
         Heading = Passed ? "Correct!" : "Not quite";
         Summary = (Errors.Count, Datasets.Count) switch
         {
             ( > 0, _) => "Your SQL couldn't be run. Fix the problem below and check again.",
             (_, 0) => "",
-            _ when Passed => report.Question.Kind == QuestionKind.Dml
-                ? $"Your script leaves every table as expected on all {Datasets.Count} datasets."
-                : $"Your query matches the expected result on all {Datasets.Count} datasets.",
-            _ => report.Question.Kind == QuestionKind.Dml
-                ? $"Your script leaves every table as expected on {Datasets.Count(d => d.IsPassed)} of {Datasets.Count} datasets."
-                : $"Your query matches the expected result on {Datasets.Count(d => d.IsPassed)} of {Datasets.Count} datasets.",
+            (_, 1) when Passed => $"{What(report.Question.Kind)}.",
+            (_, 1) => "See what's different below.",
+            _ when Passed => $"{What(report.Question.Kind)} on all {Datasets.Count} datasets.",
+            _ => $"{What(report.Question.Kind)} on {Datasets.Count(d => d.IsPassed)} of {Datasets.Count} datasets.",
         };
     }
+
+    private static string What(QuestionKind kind) => kind switch
+    {
+        QuestionKind.Dml => "Your script leaves every table as expected",
+        QuestionKind.Ddl => "Your design matches the expected one",
+        _ => "Your query matches the expected result",
+    };
 
     public bool Passed { get; }
     public bool Failed => !Passed;

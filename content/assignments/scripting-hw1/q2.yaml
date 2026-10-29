@@ -1,0 +1,56 @@
+title: Create the Membership tables
+kind: ddl
+prompt: |
+  Write the CREATE TABLE statements needed to implement the following design in the
+  Membership database. Include foreign key constraints. Define Individuals.IndividualID
+  and Groups.GroupID as identity columns. Decide which columns should allow null values,
+  if any, and explain your decision. Define the Dues column with a default of zero and a
+  check constraint to allow only positive values. GroupMembership SHOULD NOT have a
+  primary key for now.
+
+    Individuals                 GroupMembership        Groups
+    -----------------------     -----------------      -----------------
+    IndividualID, int           GroupID, int     -->   GroupID, int
+    FirstName, varchar    <--   IndividualID, int      GroupName, varchar
+    LastName, varchar                                  Dues, money
+    Address, varchar
+    Phone, varchar
+note: >-
+  The design doesn't give varchar lengths, and which columns allow NULLs is your call, so the
+  validator checks neither (be ready to explain your NULL choices). Because Dues defaults to
+  zero, "only positive values" is checked as zero or more.
+compare:
+  ignoreLengths: true
+  ignoreNullability: true
+probes:
+  - name: Adding an individual and a group
+    sql: |
+      INSERT Individuals (FirstName, LastName, Address, Phone) VALUES ('Ada', 'Lovelace', '12 Analytical Way', '555-0100');
+      INSERT Groups (GroupName, Dues) VALUES ('Chess Club', 25);
+  - name: Adding a group without dues (they should default to 0)
+    sql: |
+      INSERT Groups (GroupName) VALUES ('Book Club');
+      SELECT Dues FROM Groups WHERE GroupName = 'Book Club';
+  - name: Adding a group with negative dues
+    sql: |
+      INSERT Groups (GroupName, Dues) VALUES ('Debt Club', -5);
+  - name: Adding a membership in a group that doesn't exist
+    sql: |
+      INSERT Individuals (FirstName, LastName, Address, Phone) VALUES ('Ada', 'Lovelace', '12 Analytical Way', '555-0100');
+      INSERT GroupMembership (GroupID, IndividualID)
+      SELECT -1, IndividualID FROM Individuals WHERE LastName = 'Lovelace';
+  - name: Adding a membership for an individual who doesn't exist
+    sql: |
+      INSERT Groups (GroupName, Dues) VALUES ('Chess Club', 25);
+      INSERT GroupMembership (GroupID, IndividualID)
+      SELECT GroupID, -1 FROM Groups WHERE GroupName = 'Chess Club';
+  - name: Adding the same individual to the same group twice (allowed until exercise 6)
+    sql: |
+      INSERT Individuals (FirstName, LastName, Address, Phone) VALUES ('Ada', 'Lovelace', '12 Analytical Way', '555-0100');
+      INSERT Groups (GroupName, Dues) VALUES ('Chess Club', 25);
+      INSERT GroupMembership (GroupID, IndividualID)
+      SELECT g.GroupID, i.IndividualID FROM Groups g CROSS JOIN Individuals i
+      WHERE g.GroupName = 'Chess Club' AND i.LastName = 'Lovelace';
+      INSERT GroupMembership (GroupID, IndividualID)
+      SELECT g.GroupID, i.IndividualID FROM Groups g CROSS JOIN Individuals i
+      WHERE g.GroupName = 'Chess Club' AND i.LastName = 'Lovelace';

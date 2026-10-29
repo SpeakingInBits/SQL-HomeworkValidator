@@ -140,14 +140,15 @@ public static class Commands
                     output.Pass($"  PASS  {dataset.Dataset} data");
                     break;
                 case DatasetOutcome.Error:
-                    output.Fail($"  ERROR {dataset.Dataset} data: your {(report.Question.Kind == QuestionKind.Dml ? "script" : "query")} failed to run.");
+                    output.Fail($"  ERROR {dataset.Dataset} data: your {(report.Question.IsScript ? "script" : "query")} failed to run.");
                     foreach (var line in dataset.Message.Split(Environment.NewLine))
                         output.Line($"        {line}");
                     break;
                 default:
                     var table = dataset.Comparison?.Table;
                     output.Fail($"  FAIL  {dataset.Dataset} data");
-                    output.Line($"        {dataset.Message}");
+                    foreach (var line in dataset.Message.Split(Environment.NewLine))
+                        output.Line($"        {line}");
                     if (dataset.Comparison?.Missing is { } missing)
                     {
                         output.Line(table is null ? "        Missing rows:" : $"        Rows missing from {table}:");

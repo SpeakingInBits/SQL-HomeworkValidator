@@ -86,7 +86,7 @@ The app creates and owns its own databases. It never touches the student's worki
 - Name pattern: `HV_<CourseDb>_<dataset>`, e.g. `HV_MyGuitarShop_base`, `HV_AP_edge`.
 - Built from `schema.sql` plus one dataset script.
 - Each database records the content version in an extended property, so the app rebuilds it when an app update changes the schema or data.
-- DML checks run inside a rolled-back transaction on these databases. DDL checks (milestone 5) will need throwaway databases named `HV_scratch_<random>`, dropped after each check and cleaned up at startup if a previous run crashed.
+- DML and DDL checks run inside a rolled-back transaction on these databases, so no throwaway databases are needed.
 
 ### Datasets
 
@@ -145,14 +145,28 @@ This is much faster than building fresh databases: all 18 DML questions and thei
 
 **Questions that build on earlier exercises** (VendorCopy from exercise 1, the Brass row from exercise 1) list them in `after`. When the student's own database could give a row a different ID than the validator's copy (for example, if they ran exercise 1 twice), the question's `note` says which ID to use, and the question runs only on datasets where that ID holds.
 
-### `ddl`: database scripting (CREATE/ALTER DATABASE, TABLE, constraints, views, procedures)
+### `ddl`: database scripting (CREATE DATABASE, CREATE/ALTER TABLE, constraints, indexes)
 
-1. **Rename step (safety-critical).** Parse with ScriptDom and replace every database name with the throwaway name: `CREATE`/`DROP`/`ALTER DATABASE`, `USE`, three-part names, and string literals in `DB_ID('…')`, `DATABASEPROPERTYEX('…')` and similar. If the script contains anything that can't be renamed reliably (dynamic SQL via `EXEC('…')` or `sp_executesql`, unknown functions taking a database name), **refuse to run it** and explain why. Without this step, a typical `IF DB_ID('X') IS NOT NULL DROP DATABASE X` would delete the student's own work.
-2. Run the rewritten student script and the rewritten reference solution in separate throwaway databases.
-3. **Schema comparison** from the system catalog: tables, columns, types and lengths, nullability, identity, primary keys, foreign keys (including cascade rules), unique and check constraints, defaults. Strictness is configurable per question (constraint names ignored by default; column order optional).
-4. **Behavior tests:** instructor-written inserts that must succeed or must fail, run against both databases. These catch constraints that exist but are written wrong.
-5. Run any `select`-style checks the question defines against the new objects (views, procedures, functions).
-6. Drop the throwaway databases.
+1. **Database-level statements are never run (safety-critical).** Statements that name the question's own database are recognized and blanked out, with a note to the student: `CREATE`, `ALTER` and `DROP DATABASE`, and an `IF` around them such as `IF DB_ID('Membership') IS NOT NULL DROP DATABASE Membership`. Every `USE` is blanked out too. A database statement naming any other database is refused, as are EXEC, logins and three-part names.
+
+   This replaced the original plan to rename database names to a throwaway database. With nothing at the database level ever running, a student's `DROP DATABASE` can't touch their work, and there's no renaming to get wrong. `CREATE DATABASE Membership` itself is checked with the `CreateDatabase` rule.
+2. **Run like DML:** in the validator's copy of the question's database (Membership starts empty), inside a rolled-back transaction, after the `after` questions' solutions. Table-level DDL can be rolled back in SQL Server. The restricted user also has `REFERENCES`, so it can create foreign keys.
+3. **Schema comparison** from the system catalog:
+   - tables and columns
+   - types, including lengths (lengths can be ignored with `ignoreLengths` when the design doesn't give them)
+   - nullability (can be ignored with `ignoreNullability` when the question leaves it to the student)
+   - identity and whether a column has a default
+   - the primary key
+   - unique constraints and unique indexes, compared together
+   - foreign keys, including cascade rules
+   - other indexes, clustered or not
+   - the number of check constraints per table
+
+   Constraint and index names are ignored.
+4. **Probes:** short scripts in the question, such as "add a group with negative dues", run against both designs, each inside its own savepoint. Each must succeed or fail the same way and return the same rows. This is how check constraints and default values are tested, since the same rule can be written many ways.
+5. **The data** is compared as for DML, which catches a script that deleted rows to get a constraint added.
+
+The first of these that differs is shown, so the student sees the most basic problem first.
 
 ## Comparing result sets
 
@@ -170,10 +184,10 @@ Per-question options:
 
 - Only against databases the app created.
 - Query timeout and row cap on every run.
-- `select` questions run as a read-only database user, and `dml` questions as a read-write one that can also create and drop tables (`EXECUTE AS USER`). Both are confined to that database.
-- `dml` scripts run inside a transaction that's always rolled back.
+- `select` questions run as a read-only database user, and `dml` and `ddl` questions as a read-write one that can also create and change tables (`EXECUTE AS USER`). Both are confined to that database.
+- `dml` and `ddl` scripts run inside a transaction that's always rolled back.
 - Statement types are limited per question kind by ScriptDom before anything runs.
-- The rename step above for `ddl`.
+- Database-level statements in `ddl` scripts are skipped, never run.
 
 ## Question format
 
@@ -213,9 +227,29 @@ compare:
 
 `q<n>.setup.sql` runs after the `after` questions and before the answer. For example, `ap-hw2/q1` uses it to create stale VendorCopy and InvoiceCopy tables, so the answer has to drop them.
 
+DDL questions can also use `after`, `note` and setup scripts, and add:
+
+```yaml
+kind: ddl
+database: AP                     # optional: a different database than the assignment's
+compare:
+  ignoreLengths: true            # varchar(50) and varchar(100) match
+  ignoreNullability: true        # the question lets the student decide
+probes:
+  - name: Adding a group with negative dues
+    sql: |
+      INSERT Groups (GroupName, Dues) VALUES ('Debt Club', -5);
+  - name: Adding a group without dues (they should default to 0)
+    sql: |
+      INSERT Groups (GroupName) VALUES ('Book Club');
+      SELECT Dues FROM Groups WHERE GroupName = 'Book Club';
+```
+
+Probe names are shown to the student when a probe behaves differently, so write them as what's being tried. Probes should supply every column, since students may choose different nullability, and should look rows up by name rather than ID, since students may pick different identity seeds.
+
 **Ordered comparison and ties.** Rows are first compared as a multiset. Then, for ordered questions, the sequence of sort-key values must match the reference's. Rows that tie on the sort keys can therefore come in any order, which is what SQL Server itself guarantees. (MyGuitarShop has two products at 799.99, for example.)
 
-**Rules** available: `From`, `Where`, `Join` (including `FROM a, b`), `Subquery`, `Cte`, `OrderBy` (the statement's own, not `OVER (ORDER BY …)`), `GroupBy`, `Having`, `Distinct`, `Top`, `SelectStar`, `Union`, `AliasWithoutAs`, `SelectInto`, `InsertWithoutColumnList`. For UPDATE and DELETE, `From`, `Where` and `Join` look at the statement's own FROM and WHERE.
+**Rules** available: `From`, `Where`, `Join` (including `FROM a, b`), `Subquery`, `Cte`, `OrderBy` (the statement's own, not `OVER (ORDER BY …)`), `GroupBy`, `Having`, `Distinct`, `Top`, `SelectStar`, `Union`, `AliasWithoutAs`, `SelectInto`, `InsertWithoutColumnList`, `CreateDatabase`. For UPDATE and DELETE, `From`, `Where` and `Join` look at the statement's own FROM and WHERE.
 
 ### Instructor commands
 
@@ -242,7 +276,7 @@ compare:
 2. **Edge and shifted datasets** (done) for both databases. `hv verify` passes: all 43 mutants for `ap-hw1` and `mgs-hw1` are caught, including the four the base data couldn't catch. CI (GitHub Actions, added in its own PR) builds, runs the unit tests and runs `hv verify` against SQL Server in a container.
 3. **Avalonia app for SELECT** (done): connection page, automatic database setup, question tree with saved status, SQL editor with saved answers, and results with differences and hints. Avalonia 12.
 4. **DML questions** (done): `ap-hw2` and `mgs-hw2`, with setup chains, notes, alternatives and presence-only columns. AP exercise 5 means paying the invoice off (`PaymentTotal = InvoiceTotal - CreditTotal`); setting PaymentTotal to the balance itself is one of its mutants. The AP edge data gained an invoice that makes AP exercises 6 and 7 actually change something; in the course data they don't. The app shows which table differs, and a user journey test covers a DML question.
-5. **DDL questions:** rename step, schema comparison, behavior tests.
+5. **DDL questions** (done): `scripting-hw1` on a new, empty Membership database, plus one AP exercise (a question can name its own `database`). Database-level statements are skipped rather than renamed; the design is compared from the catalog, and probes test constraints and defaults.
 6. **Packaging:** builds per platform, signing, install instructions for students.
 
 ## Open questions

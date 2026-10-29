@@ -37,7 +37,7 @@ public sealed class DatabaseManager(ServerConnection server)
     /// Part of every database's version. Raise it when the way databases are built changes (such as a new database user),
     /// so existing databases are rebuilt.
     /// </summary>
-    private const int BuildVersion = 2;
+    private const int BuildVersion = 3;
 
     private const string ManagedProperty = "HV_Managed";
     private const string VersionProperty = "HV_ContentVersion";
@@ -145,7 +145,9 @@ public sealed class DatabaseManager(ServerConnection server)
         await ExecuteAsync(connection,
             $"CREATE USER {Quote(ReaderUser)} WITHOUT LOGIN; ALTER ROLE db_datareader ADD MEMBER {Quote(ReaderUser)}; " +
             $"CREATE USER {Quote(WriterUser)} WITHOUT LOGIN; ALTER ROLE db_datareader ADD MEMBER {Quote(WriterUser)}; " +
-            $"ALTER ROLE db_datawriter ADD MEMBER {Quote(WriterUser)}; ALTER ROLE db_ddladmin ADD MEMBER {Quote(WriterUser)};", ct);
+            $"ALTER ROLE db_datawriter ADD MEMBER {Quote(WriterUser)}; ALTER ROLE db_ddladmin ADD MEMBER {Quote(WriterUser)}; " +
+            // Creating a foreign key needs REFERENCES on the table it points to, which db_ddladmin doesn't include.
+            $"GRANT REFERENCES TO {Quote(WriterUser)};", ct);
         await SetPropertyAsync(connection, VersionProperty, ContentVersion(database, dataset), ct);
     }
 
