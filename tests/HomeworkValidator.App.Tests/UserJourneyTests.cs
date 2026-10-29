@@ -167,6 +167,43 @@ public class UserJourneyTests
 
     [AvaloniaFact]
     [Trait("Category", "NeedsSqlServer")]
+    public async Task Student_works_through_a_database_scripting_question()
+    {
+        var app = AppDriver.Launch(new MainViewModel(Content, appDataFolder: TestAppBuilder.NewTempFolder()), "ddl-journey");
+        await ConnectAsync(app);
+
+        // The whole script a student usually writes, including the database statements the validator skips.
+        // Dues > 0 contradicts the default of 0, which one of the question's probes shows.
+        const string withMistake = """
+            USE master;
+            GO
+            CREATE DATABASE Membership;
+            GO
+            USE Membership;
+            CREATE TABLE Individuals (IndividualID int IDENTITY PRIMARY KEY, FirstName varchar(50), LastName varchar(50), Address varchar(100), Phone varchar(20));
+            CREATE TABLE Groups (GroupID int IDENTITY PRIMARY KEY, GroupName varchar(50), Dues money NOT NULL DEFAULT 0 CHECK (Dues > 0));
+            CREATE TABLE GroupMembership (GroupID int REFERENCES Groups (GroupID), IndividualID int REFERENCES Individuals (IndividualID));
+            """;
+
+        app.Click(app.TreeItem("2. Create the Membership tables"));
+        app.WriteAnswer(withMistake);
+        app.Press(PhysicalKey.F5);
+
+        await app.WaitUntil(() => app.Shows("Not quite"), "the result of the script with Dues > 0");
+        app.Screenshot("check-contradicts-default");
+        Assert.True(app.ShowsTextStartingWith("Note: Skipped 'CREATE DATABASE Membership'"));
+        Assert.True(app.ShowsTextStartingWith("Adding a group without dues (they should default to 0): this should work, but with your design it fails"));
+
+        app.WriteAnswer(withMistake.Replace("CHECK (Dues > 0)", "CHECK (Dues >= 0)"));
+        app.Press(PhysicalKey.F5);
+
+        await app.WaitUntil(() => app.Shows("Correct!"), "the result of the fixed script");
+        app.Screenshot("fixed");
+        Assert.True(app.Shows("Your design matches the expected one."));
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "NeedsSqlServer")]
     public async Task A_wrong_password_says_the_login_was_rejected()
     {
         var server = TestServer();

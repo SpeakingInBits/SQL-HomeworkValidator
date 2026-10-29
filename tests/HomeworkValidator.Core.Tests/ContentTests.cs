@@ -37,7 +37,7 @@ public class ContentTests
 
         foreach (var sql in question.Alternatives.Select(a => a.Sql).Prepend(question.SolutionSql))
         {
-            var analysis = ScriptAnalyzer.Analyze(sql, question.Kind);
+            var analysis = ScriptAnalyzer.Analyze(sql, question.Kind, question.Database);
 
             Assert.True(analysis.IsRunnable, string.Join(" ", analysis.Errors));
             Assert.Empty(ScriptAnalyzer.CheckRules(analysis.Features, question.Rules));
@@ -55,6 +55,21 @@ public class ContentTests
         Assert.NotNull(q1.Note);
         Assert.Equal(["ap-hw2/q1"], q5.After);
         Assert.Equal(["InvoiceCopy.PaymentDate"], q5.Compare.PresenceOnly);
+    }
+
+    [Fact]
+    public void Scripting_homework_is_loaded_with_probes_and_its_own_databases()
+    {
+        var q2 = Content.GetQuestion("scripting-hw1/q2");
+        var q5 = Content.GetQuestion("scripting-hw1/q5");
+
+        Assert.Equal(QuestionKind.Ddl, q2.Kind);
+        Assert.Equal("Membership", q2.Database);
+        Assert.True(q2.Compare.IgnoreLengths);
+        Assert.True(q2.Compare.IgnoreNullability);
+        Assert.NotEmpty(q2.Probes);
+        // One AP exercise inside the Membership homework.
+        Assert.Equal("AP", q5.Database);
     }
 
     [Fact]

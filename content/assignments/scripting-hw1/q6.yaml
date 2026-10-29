@@ -1,0 +1,39 @@
+title: Recreate GroupMembership with a unique constraint
+kind: ddl
+after: [q2]
+prompt: |
+  Delete the GroupMembership table from the Membership database. Then, write a CREATE TABLE
+  statement that recreates the table, this time with a unique constraint that prevents an
+  individual from being a member in the same group twice.
+compare:
+  ignoreNullability: true
+probes:
+  - name: Adding a membership
+    sql: |
+      INSERT Individuals (FirstName, LastName, Address, Phone) VALUES ('Ada', 'Lovelace', '12 Analytical Way', '555-0100');
+      INSERT Groups (GroupName, Dues) VALUES ('Chess Club', 25);
+      INSERT GroupMembership (GroupID, IndividualID)
+      SELECT g.GroupID, i.IndividualID FROM Groups g CROSS JOIN Individuals i
+      WHERE g.GroupName = 'Chess Club' AND i.LastName = 'Lovelace';
+  - name: Adding the same individual to the same group twice
+    sql: |
+      INSERT Individuals (FirstName, LastName, Address, Phone) VALUES ('Ada', 'Lovelace', '12 Analytical Way', '555-0100');
+      INSERT Groups (GroupName, Dues) VALUES ('Chess Club', 25);
+      INSERT GroupMembership (GroupID, IndividualID)
+      SELECT g.GroupID, i.IndividualID FROM Groups g CROSS JOIN Individuals i
+      WHERE g.GroupName = 'Chess Club' AND i.LastName = 'Lovelace';
+      INSERT GroupMembership (GroupID, IndividualID)
+      SELECT g.GroupID, i.IndividualID FROM Groups g CROSS JOIN Individuals i
+      WHERE g.GroupName = 'Chess Club' AND i.LastName = 'Lovelace';
+  - name: Adding the same individual to two different groups
+    sql: |
+      INSERT Individuals (FirstName, LastName, Address, Phone) VALUES ('Ada', 'Lovelace', '12 Analytical Way', '555-0100');
+      INSERT Groups (GroupName, Dues) VALUES ('Chess Club', 25), ('Book Club', 10);
+      INSERT GroupMembership (GroupID, IndividualID)
+      SELECT g.GroupID, i.IndividualID FROM Groups g CROSS JOIN Individuals i
+      WHERE i.LastName = 'Lovelace';
+  - name: Adding a membership in a group that doesn't exist
+    sql: |
+      INSERT Individuals (FirstName, LastName, Address, Phone) VALUES ('Ada', 'Lovelace', '12 Analytical Way', '555-0100');
+      INSERT GroupMembership (GroupID, IndividualID)
+      SELECT -1, IndividualID FROM Individuals WHERE LastName = 'Lovelace';

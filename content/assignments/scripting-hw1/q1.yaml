@@ -1,0 +1,10 @@
+title: Create the Membership database
+kind: ddl
+prompt: |
+  Create a new database named Membership.
+note: >-
+  The validator never creates databases on your server. It checks that your script has a
+  CREATE DATABASE Membership statement, and runs the next exercises in its own copy of the
+  Membership database.
+rules:
+  require: [CreateDatabase]

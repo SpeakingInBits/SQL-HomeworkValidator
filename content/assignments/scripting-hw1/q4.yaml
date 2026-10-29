@@ -1,0 +1,13 @@
+title: Add DuesPaid to Individuals
+kind: ddl
+after: [q2]
+prompt: |
+  Write an ALTER TABLE statement that adds a new column, DuesPaid, to the Individual table.
+  Use the bit data type, disallow null values, and assign a default Boolean value of False.
+note: >-
+  "The Individual table" is the Individuals table from exercise 2.
+probes:
+  - name: Adding an individual without saying whether dues are paid (should default to False, 0)
+    sql: |
+      INSERT Individuals (FirstName, LastName, Address, Phone) VALUES ('Ada', 'Lovelace', '12 Analytical Way', '555-0100');
+      SELECT DuesPaid FROM Individuals WHERE LastName = 'Lovelace';

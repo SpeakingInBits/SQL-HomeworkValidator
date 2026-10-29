@@ -1,0 +1,1 @@
+-- Membership starts empty: students create its tables in the database scripting homework.

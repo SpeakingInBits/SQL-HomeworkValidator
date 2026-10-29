@@ -10,7 +10,21 @@ public sealed record DatabaseSnapshot(IReadOnlyDictionary<string, ResultTable> T
 /// The script's own COMMIT or ROLLBACK ended the validator's transaction, so its changes may have been saved.
 /// The database then has to be rebuilt.
 /// </param>
-public sealed record ScriptRun(DatabaseSnapshot Snapshot, bool EndedTransaction);
+public sealed record ScriptRun(DatabaseSnapshot Snapshot, bool EndedTransaction)
+{
+    /// <summary>The database's design after the script; only captured for DDL questions.</summary>
+    public SchemaSnapshot? Schema { get; init; }
+
+    /// <summary>What each of the question's probes did, in order; only for DDL questions.</summary>
+    public IReadOnlyList<ProbeResult> Probes { get; init; } = [];
+}
+
+/// <param name="Error">SQL Server's message when the probe failed; null when it succeeded.</param>
+/// <param name="Result">The probe's last result set, if it returned one.</param>
+public sealed record ProbeResult(string Name, string? Error, ResultTable? Result)
+{
+    public bool Succeeded => Error is null;
+}
 
 /// <summary>
 /// Runs a script that changes data and captures every table afterwards, without keeping the changes:
@@ -33,7 +47,12 @@ public sealed class ScriptRunner(ServerConnection server)
     /// Run <paramref name="script"/> as a database user that can read, write and create or drop tables in this database only.
     /// Student scripts always run restricted.
     /// </param>
-    public async Task<ScriptRun> RunAsync(string database, IReadOnlyList<string> setup, IReadOnlyList<string> script, bool restricted, CancellationToken ct = default)
+    /// <param name="probes">
+    /// For DDL questions: scripts to try after the main script, each rolled back on its own, to see how the design behaves.
+    /// When given, the schema is captured too.
+    /// </param>
+    public async Task<ScriptRun> RunAsync(string database, IReadOnlyList<string> setup, IReadOnlyList<string> script, bool restricted,
+        CancellationToken ct = default, IReadOnlyList<(string Name, string Sql)>? probes = null)
     {
         // Unpooled, because the impersonation below can't be undone and must not leak to other work.
         await using var connection = await server.OpenAsync(database, pooling: false, ct);
@@ -71,7 +90,15 @@ public sealed class ScriptRunner(ServerConnection server)
             }
 
             var endedTransaction = await ScalarAsync<int>(connection, "SELECT @@TRANCOUNT", ct) == 0;
-            return new ScriptRun(await SnapshotAsync(connection, ct), endedTransaction);
+            var run = new ScriptRun(await SnapshotAsync(connection, ct), endedTransaction);
+            if (probes is null)
+                return run;
+
+            return run with
+            {
+                Schema = await SchemaReader.ReadAsync(connection, ct),
+                Probes = endedTransaction ? [] : await RunProbesAsync(connection, probes, ct),
+            };
         }
         finally
         {
@@ -79,6 +106,47 @@ public sealed class ScriptRunner(ServerConnection server)
             if (connection.State == System.Data.ConnectionState.Open)
                 await ExecuteAsync(connection, "IF @@TRANCOUNT > 0 ROLLBACK;", CancellationToken.None);
         }
+    }
+
+    /// <summary>
+    /// Runs each probe inside a savepoint and rolls it back, so probes don't affect each other.
+    /// A probe that fails records SQL Server's message; one that succeeds records its last result set.
+    /// </summary>
+    private async Task<IReadOnlyList<ProbeResult>> RunProbesAsync(SqlConnection connection, IReadOnlyList<(string Name, string Sql)> probes, CancellationToken ct)
+    {
+        var results = new List<ProbeResult>();
+        foreach (var (name, sql) in probes)
+        {
+            await ExecuteAsync(connection, "SAVE TRANSACTION hv_probe;", ct);
+            string? error = null;
+            ResultTable? result = null;
+            try
+            {
+                await using var command = new SqlCommand(sql, connection) { CommandTimeout = TimeoutSeconds };
+                await using var reader = await command.ExecuteReaderAsync(ct);
+                do
+                {
+                    if (reader.FieldCount > 0)
+                        result = await QueryRunner.ReadAsync(reader, command, 1_000, $"Probe '{name}' returned too many rows.", ct);
+                }
+                while (await reader.NextResultAsync(ct));
+            }
+            catch (SqlException ex)
+            {
+                // Only the first message: "The statement has been terminated." and similar follow-ups add nothing.
+                error = ex.Errors.Count > 0 ? ex.Errors[0].Message : ex.Message;
+            }
+
+            results.Add(new ProbeResult(name, error, result));
+
+            // A failed probe can leave the transaction unusable; then the remaining probes can't run either.
+            var state = await ScalarAsync<short>(connection, "SELECT CAST(XACT_STATE() AS smallint)", ct);
+            if (state != 1)
+                break;
+            await ExecuteAsync(connection, "ROLLBACK TRANSACTION hv_probe;", ct);
+        }
+
+        return results;
     }
 
     /// <summary>Reads every user table. Used for the state after a script, and in tests.</summary>
