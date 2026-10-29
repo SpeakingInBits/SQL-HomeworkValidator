@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace HomeworkValidator.App.Services;
 
-/// <summary>The connection details the student used last. The password is never saved.</summary>
+/// <summary>The connection details the student used last. The password is never saved here; see <see cref="IPasswordStore"/>.</summary>
 public sealed class AppSettings
 {
     public string? Server { get; set; }

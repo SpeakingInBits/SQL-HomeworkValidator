@@ -14,7 +14,7 @@ Requires the .NET 10 SDK and a SQL Server you can create databases on.
 dotnet run --project src/HomeworkValidator.App
 ```
 
-Connect to your server, pick a question, write a query and press F5 (or Check). The first connection builds the validator's databases, which takes a few seconds. Answers and pass/fail status are saved automatically in your user profile (`%APPDATA%\HomeworkValidator` on Windows, `~/.config/HomeworkValidator` elsewhere); the password is never saved.
+Connect to your server, pick a question, write a query and press F5 (or Check). The first connection builds the validator's databases, which takes a few seconds. Answers and pass/fail status are saved automatically in your user profile (`%APPDATA%\HomeworkValidator` on Windows, `~/.config/HomeworkValidator` elsewhere). With SQL Server authentication you can tick "Remember my password", which keeps it in Windows Credential Manager, the macOS keychain or your Linux keyring; otherwise it isn't saved.
 
 ### Command line
 

@@ -12,15 +12,26 @@ public partial class ConnectionViewModel : ViewModelBase
     private readonly AppSettings _settings;
     private readonly string _appDataFolder;
     private readonly Action<ServerConnection, ServerInfo> _connected;
+    private readonly IPasswordStore _passwords;
 
-    public ConnectionViewModel(AppSettings settings, string appDataFolder, Action<ServerConnection, ServerInfo> connected)
+    /// <param name="passwords">Where a remembered password is kept; tests pass their own.</param>
+    public ConnectionViewModel(AppSettings settings, string appDataFolder, Action<ServerConnection, ServerInfo> connected,
+        IPasswordStore? passwords = null)
     {
         _settings = settings;
         _appDataFolder = appDataFolder;
         _connected = connected;
+        _passwords = passwords ?? PasswordStore.ForThisComputer();
         Server = settings.Server ?? DefaultServer;
         UseWindowsAuthentication = CanUseWindowsAuthentication && settings.UseWindowsAuthentication;
         User = settings.User ?? "sa";
+
+        // Fill in the password saved last time, if the student asked for that.
+        if (UseSqlAuthentication && CanRememberPassword && _passwords.Load(Server.Trim(), User.Trim()) is { } saved)
+        {
+            Password = saved;
+            RememberPassword = true;
+        }
     }
 
     public static string DefaultServer => OperatingSystem.IsWindows() ? "localhost" : "localhost,1433";
@@ -51,6 +62,14 @@ public partial class ConnectionViewModel : ViewModelBase
 
     [ObservableProperty]
     public partial string Password { get; set; } = "";
+
+    /// <summary>False where the operating system has no password store the app can use (e.g. Linux without a keyring).</summary>
+    public bool CanRememberPassword => _passwords.IsAvailable;
+
+    [ObservableProperty]
+    public partial bool RememberPassword { get; set; }
+
+    public string RememberPasswordHelp => $"It's kept encrypted in {_passwords.Description}, not in the app's own files.";
 
     [ObservableProperty]
     public partial string? Error { get; set; }
@@ -83,6 +102,7 @@ public partial class ConnectionViewModel : ViewModelBase
             _settings.UseWindowsAuthentication = UseWindowsAuthentication;
             _settings.User = User.Trim();
             _settings.Save(_appDataFolder);
+            SaveOrForgetPassword();
 
             _connected(server, info);
         }
@@ -91,6 +111,21 @@ public partial class ConnectionViewModel : ViewModelBase
             Error = Explain(ex);
             ErrorDetails = ex.Message;
         }
+    }
+
+    /// <summary>
+    /// After connecting: keeps the password that worked if the student ticked Remember, and otherwise removes any saved one,
+    /// so unticking the box is how they make the app forget it.
+    /// </summary>
+    public void SaveOrForgetPassword()
+    {
+        if (UseWindowsAuthentication || !CanRememberPassword)
+            return;
+
+        if (RememberPassword)
+            _passwords.Save(Server.Trim(), User.Trim(), Password);
+        else
+            _passwords.Delete(Server.Trim(), User.Trim());
     }
 
     /// <summary>A plain-language reason first; SqlClient's own message is shown underneath as details.</summary>
