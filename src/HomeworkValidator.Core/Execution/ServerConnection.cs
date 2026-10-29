@@ -2,6 +2,8 @@ using Microsoft.Data.SqlClient;
 
 namespace HomeworkValidator.Core.Execution;
 
+public sealed record ServerInfo(string Version, string Edition, bool CanCreateDatabases);
+
 /// <summary>How to reach the student's SQL Server. Builds connection strings for the server and for each validator database.</summary>
 public sealed class ServerConnection
 {
@@ -41,6 +43,18 @@ public sealed class ServerConnection
     }
 
     public string Server => _builder.DataSource;
+
+    /// <summary>Connects and reports the server version and whether the login can create the validator's databases.</summary>
+    public async Task<ServerInfo> TestAsync(CancellationToken ct = default)
+    {
+        await using var connection = await OpenMasterAsync(ct);
+        await using var command = new SqlCommand(
+            "SELECT CAST(SERVERPROPERTY('ProductVersion') AS nvarchar(50)), CAST(SERVERPROPERTY('Edition') AS nvarchar(100)), " +
+            "HAS_PERMS_BY_NAME(NULL, NULL, 'CREATE ANY DATABASE')", connection);
+        await using var reader = await command.ExecuteReaderAsync(ct);
+        await reader.ReadAsync(ct);
+        return new ServerInfo(reader.GetString(0), reader.GetString(1), reader.GetInt32(2) == 1);
+    }
 
     public Task<SqlConnection> OpenMasterAsync(CancellationToken ct = default) => OpenAsync("master", pooling: true, ct);
 

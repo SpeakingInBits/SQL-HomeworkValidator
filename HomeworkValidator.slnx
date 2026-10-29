@@ -1,9 +1,11 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/HomeworkValidator.App/HomeworkValidator.App.csproj" />
     <Project Path="src/HomeworkValidator.Cli/HomeworkValidator.Cli.csproj" />
     <Project Path="src/HomeworkValidator.Core/HomeworkValidator.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/HomeworkValidator.App.Tests/HomeworkValidator.App.Tests.csproj" />
     <Project Path="tests/HomeworkValidator.Core.Tests/HomeworkValidator.Core.Tests.csproj" />
   </Folder>
 </Solution>

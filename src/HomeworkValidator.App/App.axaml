@@ -1,0 +1,75 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="HomeworkValidator.App.App"
+             RequestedThemeVariant="Default">
+    <!-- "Default" follows the operating system's light or dark setting. -->
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <FontFamily x:Key="CodeFont">Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace</FontFamily>
+
+            <!-- Colors for results. Each theme variant gets its own values; use them with {DynamicResource}. -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="PassBrush" Color="#1E7B34" />
+                    <SolidColorBrush x:Key="PassBackgroundBrush" Color="#E6F4EA" />
+                    <SolidColorBrush x:Key="FailBrush" Color="#B3261E" />
+                    <SolidColorBrush x:Key="FailBackgroundBrush" Color="#FCE8E6" />
+                    <SolidColorBrush x:Key="HintBackgroundBrush" Color="#FFF6D6" />
+                    <SolidColorBrush x:Key="MutedBrush" Color="#5F6368" />
+                    <SolidColorBrush x:Key="PanelBrush" Color="#F7F7F8" />
+                    <SolidColorBrush x:Key="DividerBrush" Color="#DADCE0" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="PassBrush" Color="#81C995" />
+                    <SolidColorBrush x:Key="PassBackgroundBrush" Color="#1E3325" />
+                    <SolidColorBrush x:Key="FailBrush" Color="#F28B82" />
+                    <SolidColorBrush x:Key="FailBackgroundBrush" Color="#3C2321" />
+                    <SolidColorBrush x:Key="HintBackgroundBrush" Color="#3A3320" />
+                    <SolidColorBrush x:Key="MutedBrush" Color="#9AA0A6" />
+                    <SolidColorBrush x:Key="PanelBrush" Color="#202124" />
+                    <SolidColorBrush x:Key="DividerBrush" Color="#3C4043" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
+
+        <!-- Small set of reusable text and panel styles, applied with Classes="..." -->
+        <Style Selector="TextBlock.title">
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.heading">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="TextBlock.muted, SelectableTextBlock.muted">
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
+        </Style>
+        <Style Selector="TextBlock.pass">
+            <Setter Property="Foreground" Value="{DynamicResource PassBrush}" />
+        </Style>
+        <Style Selector="TextBlock.fail">
+            <Setter Property="Foreground" Value="{DynamicResource FailBrush}" />
+        </Style>
+        <Style Selector="Border.hint">
+            <Setter Property="Background" Value="{DynamicResource HintBackgroundBrush}" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
+        <Style Selector="Border.banner">
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="12,8" />
+        </Style>
+        <Style Selector="Border.banner.pass">
+            <Setter Property="Background" Value="{DynamicResource PassBackgroundBrush}" />
+        </Style>
+        <Style Selector="Border.banner.fail">
+            <Setter Property="Background" Value="{DynamicResource FailBackgroundBrush}" />
+        </Style>
+    </Application.Styles>
+</Application>

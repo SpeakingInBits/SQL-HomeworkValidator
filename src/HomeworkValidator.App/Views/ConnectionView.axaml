@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HomeworkValidator.App.ViewModels"
+             x:Class="HomeworkValidator.App.Views.ConnectionView"
+             x:DataType="vm:ConnectionViewModel">
+
+    <ScrollViewer>
+        <StackPanel Width="440" Margin="24,64" Spacing="14" HorizontalAlignment="Center">
+            <TextBlock Classes="title" Text="Connect to your SQL Server" />
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="The validator builds its own copies of the course databases on your server (their names start with HV_) and checks your answers against them. It never changes your own databases." />
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="Server" />
+                <TextBox Text="{Binding Server}" />
+                <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="{Binding ServerHelp}" />
+            </StackPanel>
+
+            <StackPanel Spacing="4" IsVisible="{Binding CanUseWindowsAuthentication}">
+                <TextBlock Text="Authentication" />
+                <RadioButton Content="Windows authentication" IsChecked="{Binding UseWindowsAuthentication}" GroupName="auth" />
+                <RadioButton Content="SQL Server authentication" IsChecked="{Binding UseSqlAuthentication}" GroupName="auth" />
+            </StackPanel>
+
+            <StackPanel Spacing="10" IsVisible="{Binding UseSqlAuthentication}">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Login" />
+                    <TextBox Text="{Binding User}" />
+                </StackPanel>
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Password" />
+                    <TextBox Text="{Binding Password}" PasswordChar="•" />
+                    <TextBlock Classes="muted" FontSize="12" Text="Not saved. You'll enter it each time you open the app." />
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <Button Classes="accent" Content="Connect" IsDefault="True" Command="{Binding ConnectCommand}" />
+                <ProgressBar IsIndeterminate="True" Width="120" VerticalAlignment="Center"
+                             IsVisible="{Binding ConnectCommand.IsRunning}" />
+            </StackPanel>
+
+            <SelectableTextBlock Text="{Binding Error}" Classes="fail" TextWrapping="Wrap"
+                                 IsVisible="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

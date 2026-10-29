@@ -1,0 +1,82 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HomeworkValidator.App.ViewModels"
+             xmlns:controls="using:HomeworkValidator.App.Controls"
+             x:Class="HomeworkValidator.App.Views.ResultView"
+             x:DataType="vm:ResultViewModel">
+
+    <StackPanel Spacing="12">
+        <Border Classes="banner" Classes.pass="{Binding Passed}" Classes.fail="{Binding Failed}">
+            <StackPanel Spacing="2">
+                <TextBlock Classes="heading" Classes.pass="{Binding Passed}" Classes.fail="{Binding Failed}"
+                           Text="{Binding Heading}" />
+                <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <ItemsControl ItemsSource="{Binding Notes}" IsVisible="{Binding HasNotes}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                    <TextBlock Classes="muted" Text="{Binding StringFormat='Note: {0}'}" TextWrapping="Wrap" />
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <ItemsControl ItemsSource="{Binding Errors}" IsVisible="{Binding HasErrors}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                    <SelectableTextBlock Classes="fail" Text="{Binding}" TextWrapping="Wrap"
+                                         FontFamily="{StaticResource CodeFont}" />
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <ItemsControl ItemsSource="{Binding RuleViolations}" IsVisible="{Binding HasRuleViolations}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                    <TextBlock Classes="fail" Text="{Binding}" TextWrapping="Wrap" />
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- One section per dataset -->
+        <ItemsControl ItemsSource="{Binding Datasets}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Spacing="16" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:DatasetResultViewModel">
+                    <StackPanel Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <TextBlock Text="{Binding Outcome}" FontWeight="Bold" Width="48"
+                                       Classes.pass="{Binding IsPassed}" Classes.fail="{Binding !IsPassed}" />
+                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                        </StackPanel>
+
+                        <SelectableTextBlock Text="{Binding Message}" TextWrapping="Wrap" Margin="58,0,0,0"
+                                             IsVisible="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                        <StackPanel Spacing="4" Margin="58,4,0,0"
+                                    IsVisible="{Binding Missing, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <TextBlock Classes="muted" Text="{Binding MissingHeading}" />
+                            <controls:ResultGrid Sample="{Binding Missing}" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4" Margin="58,4,0,0"
+                                    IsVisible="{Binding Unexpected, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <TextBlock Classes="muted" Text="{Binding UnexpectedHeading}" />
+                            <controls:ResultGrid Sample="{Binding Unexpected}" />
+                        </StackPanel>
+
+                        <Border Classes="hint" Margin="58,4,0,0"
+                                IsVisible="{Binding Hint, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <TextBlock Text="{Binding Hint, StringFormat='Hint: {0}'}" TextWrapping="Wrap" />
+                        </Border>
+                    </StackPanel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</UserControl>
