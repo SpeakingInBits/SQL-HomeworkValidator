@@ -23,6 +23,16 @@ public sealed class ContentLibraryTests : IDisposable
     }
 
     [Fact]
+    public void Content_is_found_in_a_macOS_app_bundle()
+    {
+        Write("Validator.app/Contents/Resources/content/databases/Shop/schema.sql", "");
+        var executableDir = Path.Combine(_root, "Validator.app", "Contents", "MacOS");
+        Directory.CreateDirectory(executableDir);
+
+        Assert.Equal(Path.Combine(_root, "Validator.app", "Contents", "Resources", "content"), ContentLibrary.FindRoot(executableDir));
+    }
+
+    [Fact]
     public void Include_lines_insert_the_named_file()
     {
         Write("databases/Shop/datasets/edge.sql", "-- edge\n:r base.sql\nINSERT Items VALUES (2)");

@@ -56,16 +56,18 @@ public sealed partial class ContentLibrary
     }
 
     /// <summary>
-    /// Finds the content folder: next to the executable when published, otherwise by walking up
-    /// from <paramref name="start"/> to the repository's <c>content</c> folder.
+    /// Finds the content folder: next to the executable when published, in <c>Contents/Resources</c> inside a macOS app bundle,
+    /// otherwise by walking up from <paramref name="start"/> to the repository's <c>content</c> folder.
     /// </summary>
     public static string FindRoot(string start)
     {
         for (var dir = new DirectoryInfo(start); dir is not null; dir = dir.Parent)
         {
-            var candidate = Path.Combine(dir.FullName, "content");
-            if (Directory.Exists(Path.Combine(candidate, "databases")))
-                return candidate;
+            foreach (var candidate in new[] { Path.Combine(dir.FullName, "content"), Path.Combine(dir.FullName, "Resources", "content") })
+            {
+                if (Directory.Exists(Path.Combine(candidate, "databases")))
+                    return candidate;
+            }
         }
 
         throw new ContentException($"Couldn't find a content folder above {start}.");
