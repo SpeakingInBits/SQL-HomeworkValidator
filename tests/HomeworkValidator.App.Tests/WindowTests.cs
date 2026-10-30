@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
@@ -105,6 +107,79 @@ public class WindowTests
         var texts = VisibleTexts(window).ToList();
         Assert.Contains("Your result (3)", texts);
         Assert.Contains("Expected result (1)", texts);
+    }
+
+    [AvaloniaFact]
+    public void Wide_results_scroll_sideways_on_both_sides()
+    {
+        var viewModel = new MainViewModel(Content);
+        var workspace = new WorkspaceViewModel(Content, ServerConnection.Create("example-server", "sa", "x"),
+            new ServerInfo("17.0.1000.7", "Developer Edition (64-bit)", true), new AnswerStore(TestAppBuilder.NewTempFolder()), () => { });
+        viewModel.CurrentPage = workspace;
+        var question = workspace.Assignments.SelectMany(a => a.Questions).Single(q => q.Question.Id == "mgs-hw1/q3");
+        workspace.SelectedNode = question;
+
+        // Twelve columns: far wider than either half of the side-by-side view.
+        var columns = Enumerable.Range(1, 12).Select(i => $"Column{i}").ToArray();
+        var rows = Enumerable.Range(1, 4).Select(r => (IReadOnlyList<string>)columns.Select(c => $"{c} value in row {r}").ToList()).ToList();
+        question.Result = new ResultViewModel(new CheckReport(question.Question, [], [], [],
+        [
+            new DatasetResult("edge", DatasetOutcome.Failed, "Expected 3 rows, but your query returned 4 rows.",
+                new ComparisonResult(false, "", Unexpected: new RowSample(columns, rows.Skip(3).ToList(), 1))
+                    { Actual = new RowSample(columns, rows, 4), Expected = new RowSample(columns, rows.Take(3).ToList(), 3) },
+                null),
+        ]));
+
+        var window = Show(viewModel);
+        var expander = window.GetVisualDescendants().OfType<Expander>().Single();
+        expander.IsExpanded = true;
+
+        // The normal size, then narrower, as when the student resizes the window.
+        foreach (var width in new[] { 1200, 900 })
+        {
+            window.Width = width;
+            window.UpdateLayout();
+            expander.BringIntoView();
+            window.UpdateLayout();
+            TestAppBuilder.SaveScreenshot(window, $"result-wide-{width}");
+
+            var grids = expander.GetVisualDescendants().OfType<ResultGrid>().ToList();
+            Assert.Equal(2, grids.Count);
+            var yours = grids[0].TranslatePoint(default, window)!.Value;
+            var expected = grids[1].TranslatePoint(default, window)!.Value;
+            Assert.Equal(yours.Y, expected.Y); // still side by side
+            Assert.True(yours.X < expected.X);
+
+            var sectionRight = expander.TranslatePoint(new Point(expander.Bounds.Width, 0), window)!.Value.X;
+            foreach (var grid in grids)
+            {
+                // The grid stays inside the section; what doesn't fit scrolls instead of running past the edge.
+                Assert.True(grid.TranslatePoint(new Point(grid.Bounds.Width, 0), window)!.Value.X <= sectionRight);
+
+                var scroller = grid.GetVisualDescendants().OfType<ScrollViewer>().Single();
+                Assert.True(scroller.Extent.Width > scroller.Viewport.Width);
+
+                // A full-size scroll bar under the rows, not a thin line drawn over the last one.
+                var bar = scroller.GetVisualDescendants().OfType<ScrollBar>().Single(b => b.Orientation == Avalonia.Layout.Orientation.Horizontal);
+                var rowsArea = scroller.GetVisualDescendants().OfType<ScrollContentPresenter>().Single();
+                Assert.True(bar.IsEffectivelyVisible);
+                Assert.True(bar.TranslatePoint(default, scroller)!.Value.Y >= rowsArea.TranslatePoint(new Point(0, rowsArea.Bounds.Height), scroller)!.Value.Y);
+
+                // Scrolled all the way, the last column is in full view.
+                var last = grid.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "Column12");
+                Assert.False(InView(last, scroller));
+                scroller.Offset = new Vector(scroller.Extent.Width - scroller.Viewport.Width, 0);
+                window.UpdateLayout();
+                Assert.True(InView(last, scroller));
+                scroller.Offset = default;
+            }
+        }
+
+        static bool InView(Control control, ScrollViewer scroller)
+        {
+            var left = control.TranslatePoint(default, scroller)!.Value.X;
+            return left >= 0 && left + control.Bounds.Width <= scroller.Viewport.Width;
+        }
     }
 
     [AvaloniaFact]

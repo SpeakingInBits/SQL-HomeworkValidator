@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
@@ -78,10 +80,35 @@ public sealed class AppDriver
 
     public TextEditor Editor => Find<TextEditor>(_ => true, "the SQL editor");
 
+    /// <summary>The header of a section that opens and closes, such as "Show your whole result next to the expected one".</summary>
+    public ToggleButton SectionHeader(string text) =>
+        Find<Expander>(e => e.Header as string == text, $"a section headed '{text}'").GetVisualDescendants().OfType<ToggleButton>().First();
+
+    /// <summary>The first text block showing exactly this text, e.g. a column name in a result.</summary>
+    public TextBlock Text(string text) => Find<TextBlock>(t => t.Text == text, $"the text '{text}'");
+
+    /// <summary>True if all of the control is inside the part of its result that's showing, not scrolled away or cut off.</summary>
+    public bool IsScrolledIntoView(Control control)
+    {
+        var scroller = control.FindAncestorOfType<ScrollViewer>() ?? throw new InvalidOperationException($"{control.GetType().Name} isn't in anything that scrolls.");
+        var topLeft = control.TranslatePoint(default, scroller)!.Value;
+        return topLeft.X >= 0 && topLeft.X + control.Bounds.Width <= scroller.Viewport.Width;
+    }
+
     // ----- Acting -----
 
     /// <summary>Moves the mouse to the middle of the control and clicks.</summary>
     public void Click(Control control)
+    {
+        var center = PointOn(control);
+        Window.MouseMove(center);
+        Window.MouseDown(center, MouseButton.Left);
+        Window.MouseUp(center, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>Where the mouse goes to use the control: its middle, once it's on screen and nothing covers it.</summary>
+    private Point PointOn(Control control)
     {
         // Scroll it into view, then let layout and rendering catch up so positions and hit testing are current.
         control.BringIntoView();
@@ -100,10 +127,24 @@ public sealed class AppDriver
                 $"Clicking the middle of the {control.GetType().Name} at {center} would hit {Describe(Window.InputHitTest(center))} instead. Screenshot: {screenshot}");
         }
 
-        Window.MouseMove(center);
-        Window.MouseDown(center, MouseButton.Left);
-        Window.MouseUp(center, MouseButton.Left);
+        return center;
+    }
+
+    /// <summary>Drags the sideways scroll bar of the result the control is in all the way to the right.</summary>
+    public void ScrollRight(Control inside)
+    {
+        var scroller = inside.FindAncestorOfType<ScrollViewer>() ?? throw new InvalidOperationException($"{inside.GetType().Name} isn't in anything that scrolls.");
+        var bar = scroller.GetVisualDescendants().OfType<ScrollBar>().SingleOrDefault(b => b.Orientation == Orientation.Horizontal && b.IsEffectivelyVisible)
+                  ?? throw new InvalidOperationException($"There's no sideways scroll bar to drag. Screenshot: {Screenshot("no-scroll-bar")}");
+        var start = PointOn(bar.GetVisualDescendants().OfType<Thumb>().Single());
+        var end = bar.TranslatePoint(new Point(bar.Bounds.Width, bar.Bounds.Height / 2), Window)!.Value;
+
+        Window.MouseMove(start);
+        Window.MouseDown(start, MouseButton.Left);
+        Window.MouseMove(end, RawInputModifiers.LeftMouseButton);
+        Window.MouseUp(end, MouseButton.Left);
         Dispatcher.UIThread.RunJobs();
+        Window.UpdateLayout();
     }
 
     public void Press(PhysicalKey key, RawInputModifiers modifiers = RawInputModifiers.None)
