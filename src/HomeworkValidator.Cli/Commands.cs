@@ -132,21 +132,22 @@ public static class Commands
         foreach (var violation in report.RuleViolations)
             output.Fail($"  Rule: {violation}");
 
-        foreach (var dataset in report.Datasets)
+        // Datasets that came out the same are printed together, so each problem appears once.
+        foreach (var dataset in report.Groups)
         {
             switch (dataset.Outcome)
             {
                 case DatasetOutcome.Passed:
-                    output.Pass($"  PASS  {dataset.Dataset} data");
+                    output.Pass($"  PASS  {dataset.Title}");
                     break;
                 case DatasetOutcome.Error:
-                    output.Fail($"  ERROR {dataset.Dataset} data: your {(report.Question.IsScript ? "script" : "query")} failed to run.");
+                    output.Fail($"  ERROR {dataset.Title}: your {(report.Question.IsScript ? "script" : "query")} failed to run.");
                     foreach (var line in dataset.Message.Split(Environment.NewLine))
                         output.Line($"        {line}");
                     break;
                 default:
                     var table = dataset.Comparison?.Table;
-                    output.Fail($"  FAIL  {dataset.Dataset} data");
+                    output.Fail($"  FAIL  {dataset.Title}");
                     foreach (var line in dataset.Message.Split(Environment.NewLine))
                         output.Line($"        {line}");
                     if (dataset.Comparison?.Missing is { } missing)

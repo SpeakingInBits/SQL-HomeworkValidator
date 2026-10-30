@@ -27,9 +27,9 @@ public sealed class Verifier(Checker checker)
                 var self = await checker.CheckAsync(question, reference.Sql, ct);
                 problems.AddRange(self.Errors.Select(e => $"{label}: {e}"));
                 problems.AddRange(self.RuleViolations.Select(v => $"{label} breaks the question's rule: {v}"));
-                problems.AddRange(self.Datasets
-                    .Where(d => d.Outcome != DatasetOutcome.Passed)
-                    .Select(d => $"{label} doesn't pass on '{d.Dataset}': {d.Message}"));
+                problems.AddRange(self.Groups
+                    .Where(g => g.Outcome != DatasetOutcome.Passed)
+                    .Select(g => $"{label} doesn't pass. {g.Title}: {g.Message}"));
             }
         }
         catch (QuestionConfigurationException ex)
@@ -55,7 +55,7 @@ public sealed class Verifier(Checker checker)
             return report.Errors[0];
         if (report.RuleViolations.Count > 0)
             return report.RuleViolations[0];
-        var failed = report.Datasets.First(d => d.Outcome != DatasetOutcome.Passed);
-        return $"{failed.Dataset}: {failed.Message}";
+        var failed = report.Groups.First(g => g.Outcome != DatasetOutcome.Passed);
+        return $"{failed.Title}: {failed.Message}";
     }
 }

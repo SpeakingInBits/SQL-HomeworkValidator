@@ -21,14 +21,16 @@ public static class StateComparer
         if (missingTables.Count > 0)
         {
             return new ComparisonResult(false,
-                $"Expected {Names(missingTables)} to exist after your script, but {(missingTables.Count == 1 ? "it doesn't" : "they don't")}.");
+                $"Expected {Names(missingTables)} to exist after your script, but {(missingTables.Count == 1 ? "it doesn't" : "they don't")}.")
+                { Structural = true };
         }
 
         var extraTables = actual.Tables.Keys.Where(t => !expected.Tables.ContainsKey(t)).Order().ToList();
         if (extraTables.Count > 0)
         {
             return new ComparisonResult(false,
-                $"Your script left {Names(extraTables)} in the database, which {(extraTables.Count == 1 ? "isn't" : "aren't")} expected.");
+                $"Your script left {Names(extraTables)} in the database, which {(extraTables.Count == 1 ? "isn't" : "aren't")} expected.")
+                { Structural = true };
         }
 
         var tableOptions = new CompareOptions(ColumnMatch.ByName, [], options.Decimals);
