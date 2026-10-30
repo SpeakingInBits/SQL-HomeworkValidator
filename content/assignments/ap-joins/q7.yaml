@@ -1,0 +1,14 @@
+title: Accounts that have never been used
+prompt: |
+  Write a SELECT statement that returns two columns from the GLAccounts table:
+  AccountNo and AccountDescription. The result set should have one row for each account
+  number that has never been used. Sort the final result set by AccountNo. Use the
+  explicit join syntax.
+
+  Hint: Use an outer join to the InvoiceLineItems table.
+compare:
+  order: [AccountNo]
+rules:
+  forbid: [ImplicitJoin]
+hints:
+  edge: The edge data adds an account that no invoice line item uses.

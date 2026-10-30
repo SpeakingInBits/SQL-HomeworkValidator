@@ -1,0 +1,17 @@
+title: Accounts with more than one line item, December to February
+prompt: |
+  Modify the solution to exercise 4 to filter for invoices dated from December 1, 2022
+  to February 28, 2023.
+
+  Exercise 4: Return AccountDescription, LineItemCount (the number of line items with
+  that AccountNo), and LineItemSum (the sum of InvoiceLineItemAmount for that
+  AccountNo), only for rows with LineItemCount greater than 1, grouped by account
+  description and sorted by descending LineItemCount.
+
+  Hint: Join to the Invoices table to code a search condition based on InvoiceDate.
+compare:
+  order: [LineItemCount]
+hints:
+  edge: >-
+    The edge data has line items on invoices dated February 28, 2023 and March 1, 2023. Include the
+    first and leave out the second.

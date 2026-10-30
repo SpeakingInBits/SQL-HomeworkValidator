@@ -1,0 +1,10 @@
+title: Line items by vendor and account
+prompt: |
+  Write a SELECT statement that returns four columns: VendorName, AccountDescription,
+  LineItemCount, and LineItemSum. LineItemCount is the row count, and LineItemSum is the
+  sum of the InvoiceLineItemAmount column. For each vendor and account, return the
+  number and sum of line items, sorted first by vendor, then by account description.
+
+  Hint: Use a four-table join.
+compare:
+  order: [VendorName, AccountDescription]

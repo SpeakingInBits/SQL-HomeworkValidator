@@ -11,6 +11,7 @@ namespace HomeworkValidator.Core.Content;
 /// <code>
 /// databases/&lt;Name&gt;/schema.sql
 /// databases/&lt;Name&gt;/datasets/&lt;dataset&gt;.sql
+/// assignments/order.yaml
 /// assignments/&lt;id&gt;/assignment.yaml
 /// assignments/&lt;id&gt;/q&lt;n&gt;.yaml, q&lt;n&gt;.sql, q&lt;n&gt;.mutants/*.sql, q&lt;n&gt;.alternatives/*.sql, q&lt;n&gt;.setup.sql
 /// </code>
@@ -164,7 +165,28 @@ public sealed partial class ContentLibrary
             result.Add(assignment);
         }
 
-        return result;
+        return ApplyOrder(result, Path.Combine(dir, "order.yaml"));
+    }
+
+    /// <summary>
+    /// Puts assignments in the order listed in assignments/order.yaml, which must name every assignment folder once.
+    /// Without it, assignments are sorted by folder name. Folder names stay fixed (students' saved answers are filed
+    /// under them), so reordering and renaming happen in order.yaml and each assignment.yaml's title.
+    /// </summary>
+    private static List<Assignment> ApplyOrder(List<Assignment> assignments, string orderPath)
+    {
+        if (!File.Exists(orderPath))
+            return assignments;
+
+        var order = Deserialize<List<string>>(orderPath);
+        foreach (var id in order.Where(id => assignments.All(a => !a.Id.Equals(id, StringComparison.OrdinalIgnoreCase))))
+            throw new ContentException($"{orderPath}: there is no assignment folder named '{id}'.");
+        foreach (var id in order.GroupBy(id => id, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1).Select(g => g.Key))
+            throw new ContentException($"{orderPath}: '{id}' is listed more than once.");
+        foreach (var assignment in assignments.Where(a => !order.Contains(a.Id, StringComparer.OrdinalIgnoreCase)))
+            throw new ContentException($"{orderPath}: add '{assignment.Id}' so the app knows where to show it.");
+
+        return order.Select(id => assignments.First(a => a.Id.Equals(id, StringComparison.OrdinalIgnoreCase))).ToList();
     }
 
     private static Question LoadQuestion(string path, int number, string assignmentId, CourseDatabase assignmentDatabase, List<CourseDatabase> databases)

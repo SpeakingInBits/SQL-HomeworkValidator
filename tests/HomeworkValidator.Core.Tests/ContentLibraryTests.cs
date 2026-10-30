@@ -76,6 +76,32 @@ public sealed class ContentLibraryTests : IDisposable
     }
 
     [Fact]
+    public void Assignments_follow_the_order_file()
+    {
+        Write("assignments/hw1/assignment.yaml", "title: Homework 1\ndatabase: Shop");
+        Write("assignments/hw2/assignment.yaml", "title: Homework 2\ndatabase: Shop");
+
+        Assert.Equal(["hw1", "hw2"], ContentLibrary.Load(_root).Assignments.Select(a => a.Id));
+
+        Write("assignments/order.yaml", "- hw2\n- hw1");
+        Assert.Equal(["hw2", "hw1"], ContentLibrary.Load(_root).Assignments.Select(a => a.Id));
+    }
+
+    [Theory]
+    [InlineData("- hw1", "add 'hw2'")]
+    [InlineData("- hw1\n- hw2\n- hw3", "no assignment folder named 'hw3'")]
+    [InlineData("- hw1\n- hw2\n- HW1", "listed more than once")]
+    public void Order_file_must_list_every_assignment_once(string yaml, string message)
+    {
+        Write("assignments/hw1/assignment.yaml", "title: Homework 1\ndatabase: Shop");
+        Write("assignments/hw2/assignment.yaml", "title: Homework 2\ndatabase: Shop");
+        Write("assignments/order.yaml", yaml);
+
+        var ex = Assert.Throws<ContentException>(() => ContentLibrary.Load(_root));
+        Assert.Contains(message, ex.Message);
+    }
+
+    [Fact]
     public void Question_options_are_parsed()
     {
         Write("assignments/hw1/assignment.yaml", "title: Homework 1\ndatabase: Shop");

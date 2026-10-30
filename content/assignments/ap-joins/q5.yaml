@@ -1,0 +1,22 @@
+title: Invoice line items with column aliases
+prompt: |
+  Write a SELECT statement that returns five columns from three tables, all using column
+  aliases:
+
+    Vendor    VendorName column
+    Date      InvoiceDate column
+    Number    InvoiceNumber column
+    #         InvoiceSequence column
+    LineItem  InvoiceLineItemAmount column
+
+  Assign the following correlation names to the tables:
+
+    v   Vendors table
+    i   Invoices table
+    li  InvoiceLineItems table
+
+  Sort the final result set by Vendor, Date, Number, and #. Use the explicit join syntax.
+compare:
+  order: [Vendor, Date, Number, "#"]
+rules:
+  forbid: [ImplicitJoin]

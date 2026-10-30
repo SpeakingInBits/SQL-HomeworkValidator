@@ -41,6 +41,7 @@ content/
     AP/
       ...same layout
   assignments/
+    order.yaml            # the order assignments appear in the app
     ap-hw1/
       assignment.yaml     # title, database, and when to offer solutions
       q5.yaml             # prompt, compare options, rules, hints
@@ -193,8 +194,10 @@ Per-question options:
 
 Each assignment folder has an `assignment.yaml` and one `q<n>.yaml` per question. Question IDs are `<assignment>/q<n>`, e.g. `mgs-hw1/q2`.
 
+`assignments/order.yaml` lists the assignment folders in the order the app shows them, and must name each one once. The app shows each assignment's `title`, which matches its Canvas assignment name. To reorder or rename assignments, edit `order.yaml` and the titles, then release an update. Don't rename the folders, because students' saved answers are filed under them.
+
 ```yaml
-title: AP Homework 1
+title: AP SELECT Queries
 database: AP
 showSolutions: 2026-12-15        # optional: true, false (the default), or the first day to offer "Show solution"
 ```
@@ -257,7 +260,7 @@ Probe names are shown to the student when a probe behaves differently, so write 
 
 **Ordered comparison and ties.** Rows are first compared as a multiset. Then, for ordered questions, the sequence of sort-key values must match the reference's. Rows that tie on the sort keys can therefore come in any order, which is what SQL Server itself guarantees. (MyGuitarShop has two products at 799.99, for example.)
 
-**Rules** available: `From`, `Where`, `Join` (including `FROM a, b`), `Subquery`, `Cte`, `OrderBy` (the statement's own, not `OVER (ORDER BY …)`), `GroupBy`, `Having`, `Distinct`, `Top`, `SelectStar`, `Union`, `AliasWithoutAs`, `SelectInto`, `InsertWithoutColumnList`, `CreateDatabase`. For UPDATE and DELETE, `From`, `Where` and `Join` look at the statement's own FROM and WHERE.
+**Rules** available: `From`, `Where`, `Join` (including `FROM a, b`), `ImplicitJoin` (only `FROM a, b`), `Subquery`, `Cte`, `OrderBy` (the statement's own, not `OVER (ORDER BY …)`), `GroupBy`, `Having`, `Distinct`, `Top`, `SelectStar`, `Union`, `AliasWithoutAs`, `SelectInto`, `InsertWithoutColumnList`, `CreateDatabase`. For UPDATE and DELETE, `From`, `Where` and `Join` look at the statement's own FROM and WHERE.
 
 ### Instructor commands
 

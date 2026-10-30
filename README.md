@@ -61,7 +61,7 @@ VERSION=0.0.1 packaging/package.sh win-x64
 
 ## Adding questions
 
-Questions live in `content/assignments/<assignment>/`. See "Question format" in [PLAN.md](PLAN.md). After adding or changing one, run `hv verify <assignment>`. If one of your known-wrong answers passes, add rows to the database's `datasets/edge.sql` that tell it apart.
+Questions live in `content/assignments/<assignment>/`. See "Question format" in [PLAN.md](PLAN.md). A new assignment folder also goes in `content/assignments/order.yaml`, which sets the order the app shows assignments in. After adding or changing one, run `hv verify <assignment>`. If one of your known-wrong answers passes, add rows to the database's `datasets/edge.sql` that tell it apart.
 
 If you change a database's `datasets/base.sql`, regenerate its shifted dataset from the repository root:
 

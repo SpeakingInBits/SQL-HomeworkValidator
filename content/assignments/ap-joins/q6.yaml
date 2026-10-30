@@ -1,0 +1,22 @@
+title: Vendors whose contacts share a first name
+prompt: |
+  Write a SELECT statement that returns three columns:
+
+    VendorID    From the Vendors table
+    VendorName  From the Vendors table
+    Name        A concatenation of VendorContactFName and VendorContactLName, with a
+                space in between
+
+  The result set should have one row for each vendor whose contact has the same first
+  name as another vendor's contact. Sort the final result set by Name. Use the explicit
+  join syntax.
+
+  Hint: Use a self-join.
+compare:
+  order: [Name]
+rules:
+  forbid: [ImplicitJoin]
+hints:
+  edge: >-
+    The edge data has three vendors whose contacts are named Robert, so each one matches two others.
+    Return each vendor only once.

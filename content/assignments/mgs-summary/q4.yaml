@@ -1,0 +1,17 @@
+title: Customers with more than one order
+prompt: |
+  Write a SELECT statement that returns one row for each customer that has orders, with
+  these columns:
+
+    The EmailAddress column from the Customers table
+    A count of the number of orders
+    The total amount for each order (Hint: First, subtract the discount amount from the
+    price. Then, multiply by the quantity.)
+
+  Return only those rows where the customer has more than 1 order.
+
+  Sort the result set in descending sequence by the sum of the line item amounts.
+note: The question doesn't name the columns, so only their order is checked.
+compare:
+  columns: by-position
+  order: [OrderTotal]

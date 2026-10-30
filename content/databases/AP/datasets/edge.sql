@@ -53,3 +53,29 @@ INSERT Invoices (VendorID, InvoiceNumber, InvoiceDate, InvoiceTotal, PaymentTota
                  TermsID, InvoiceDueDate, PaymentDate)
 VALUES (@termsVendor, 'EDGE-TERMS', '2023-02-09', 820.00, 820.00, 0.00, 3, '2023-03-11', '2023-02-25');
 GO
+
+-- A third contact named Robert: a self-join on first name then pairs each Robert with two others,
+-- so it returns each of them twice unless the query uses DISTINCT.
+INSERT Vendors (VendorName, VendorAddress1, VendorAddress2, VendorCity, VendorState, VendorZipCode,
+                VendorPhone, VendorContactLName, VendorContactFName, DefaultTermsID, DefaultAccountNo)
+VALUES ('Edge Contact Supply', '400 Boundary Way', NULL, 'Fresno', 'CA', '93711',
+        '(559) 555-0102', 'Edgerton', 'Robert', 3, 570);
+
+-- An account no invoice line item uses, so a hardcoded list of the course data's unused accounts misses it.
+INSERT GLAccounts (AccountNo, AccountDescription) VALUES (999, 'Edge Unused Account');
+GO
+
+-- Freight invoices with line items on February 28, 2023 and the day after, so a filter for "December 1, 2022
+-- to February 28, 2023" that leaves out the last day, or runs into March, counts the wrong line items.
+DECLARE @rangeVendor int = (SELECT VendorID FROM Vendors WHERE VendorName = 'Edge Case Supply');
+
+INSERT Invoices (VendorID, InvoiceNumber, InvoiceDate, InvoiceTotal, PaymentTotal, CreditTotal,
+                 TermsID, InvoiceDueDate, PaymentDate)
+VALUES (@rangeVendor, 'EDGE-FEB-28', '2023-02-28', 120.00, 120.00, 0.00, 3, '2023-03-30', '2023-03-15'),
+       (@rangeVendor, 'EDGE-MAR-1',  '2023-03-01', 130.00, 130.00, 0.00, 3, '2023-03-31', '2023-03-16');
+
+INSERT InvoiceLineItems (InvoiceID, InvoiceSequence, AccountNo, InvoiceLineItemAmount, InvoiceLineItemDescription)
+SELECT InvoiceID, 1, 553, InvoiceTotal, 'Edge freight'
+FROM Invoices
+WHERE InvoiceNumber IN ('EDGE-FEB-28', 'EDGE-MAR-1');
+GO

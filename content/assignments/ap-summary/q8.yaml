@@ -1,0 +1,10 @@
+title: Vendors paid from more than one account
+prompt: |
+  Write a SELECT statement that answers this question: Which vendors are being paid from
+  more than one account? Return two columns: the vendor name and the total number of
+  accounts that apply to that vendor's invoices.
+
+  Hint: Use the DISTINCT keyword to count InvoiceLineItems.AccountNo.
+note: The question doesn't name the columns, so only their order is checked (the vendor name, then the count).
+compare:
+  columns: by-position

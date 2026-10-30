@@ -1,0 +1,10 @@
+title: Total invoiced by account, with a grand total
+prompt: |
+  Write a SELECT statement that answers the following question: What is the total
+  amount invoiced for each AccountNo? Use the WITH ROLLUP operator to include a row that
+  gives the grand total.
+
+  Hint: Use the InvoiceLineItemAmount column of the InvoiceLineItems table.
+note: The question doesn't name the columns, so only their order is checked (AccountNo, then the total).
+compare:
+  columns: by-position

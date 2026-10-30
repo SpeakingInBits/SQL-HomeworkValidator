@@ -1,0 +1,12 @@
+title: Balances due with the implicit join syntax
+prompt: |
+  Generate the same result set described in exercise 2, but with the implicit join
+  syntax.
+
+  Exercise 2: Return VendorName, InvoiceNumber, InvoiceDate, and Balance (InvoiceTotal
+  minus the sum of PaymentTotal and CreditTotal), with one row for each invoice with a
+  non-zero balance, sorted by VendorName in ascending order.
+compare:
+  order: [VendorName]
+rules:
+  require: [ImplicitJoin]
