@@ -48,7 +48,8 @@ for rid in "$@"; do
     win-*)
       mv "$out/publish" "$out/HomeworkValidator"
       mv "$out/HomeworkValidator/HomeworkValidator.App.exe" "$out/HomeworkValidator/HomeworkValidator.exe"
-      pack --packDir "$out/HomeworkValidator" --mainExe HomeworkValidator.exe
+      # The icon is Setup.exe's; the app's own icon is built into HomeworkValidator.exe.
+      pack --packDir "$out/HomeworkValidator" --mainExe HomeworkValidator.exe --icon packaging/app-icon/icon.ico
       ;;
     osx-*)
       app="$out/SQL Homework Validator.app"
@@ -56,6 +57,7 @@ for rid in "$@"; do
       mv "$out/publish/content" "$app/Contents/Resources/"
       mv "$out/publish/"* "$app/Contents/MacOS/"
       mv "$app/Contents/MacOS/HomeworkValidator.App" "$app/Contents/MacOS/HomeworkValidator"
+      cp packaging/app-icon/icon.icns "$app/Contents/Resources/"
       sed "s/{{VERSION}}/$version/g" packaging/Info.plist > "$app/Contents/Info.plist"
       # vpk adds its updater to the bundle, then signs the whole bundle; "-" is an ad-hoc signature.
       # No .pkg installer: without a Developer ID it's blocked just like the app, and the zipped .app is simpler.
@@ -67,7 +69,7 @@ for rid in "$@"; do
     linux-*)
       mv "$out/publish" "$out/HomeworkValidator"
       mv "$out/HomeworkValidator/HomeworkValidator.App" "$out/HomeworkValidator/HomeworkValidator"
-      pack --packDir "$out/HomeworkValidator" --mainExe HomeworkValidator
+      pack --packDir "$out/HomeworkValidator" --mainExe HomeworkValidator --icon packaging/app-icon/icon.png
       ;;
     *)
       echo "Don't know how to package $rid." >&2

@@ -5,10 +5,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- The .exe's icon, which Windows also uses for its shortcuts. Made from packaging/app-icon/icon.svg. -->
+    <ApplicationIcon>..\..\packaging\app-icon\icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
-    <AvaloniaResource Include="Assets\**" />
+    <!-- The window's icon (title bar and taskbar), the same file as the .exe's. -->
+    <AvaloniaResource Include="..\..\packaging\app-icon\icon.ico" Link="Assets\icon.ico" />
   </ItemGroup>
 
   <ItemGroup>
