@@ -20,6 +20,12 @@ public sealed record ComparisonResult(bool Passed, string Message, RowSample? Mi
 
     /// <summary>The whole result the student's SQL produced (or the table after their script), as they returned it.</summary>
     public RowSample? Actual { get; init; }
+
+    /// <summary>
+    /// True when the difference is in the shape of the result (its columns, which tables exist, a design) rather than its rows.
+    /// That doesn't depend on the data, so it's the same on every dataset.
+    /// </summary>
+    public bool Structural { get; init; }
 }
 
 /// <summary>
@@ -46,7 +52,7 @@ public static class ResultComparer
 
         var (map, columnError) = AlignColumns(expected.Columns, actual.Columns, options.Columns, words);
         if (columnError is not null)
-            return new ComparisonResult(false, columnError) { Table = table };
+            return new ComparisonResult(false, columnError) { Table = table, Structural = true };
 
         var expectedRows = expected.Rows.Select(r => Format(r, options.Decimals)).ToList();
         var actualRows = actual.Rows.Select(r => Format(map!.Select(i => r[i]).ToArray(), options.Decimals)).ToList();

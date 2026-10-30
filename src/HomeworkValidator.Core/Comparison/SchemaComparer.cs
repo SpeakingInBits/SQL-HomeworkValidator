@@ -31,7 +31,7 @@ public static class SchemaComparer
         var shown = differences.Take(MaxDifferences).ToList();
         if (differences.Count > MaxDifferences)
             shown.Add($"...and {differences.Count - MaxDifferences} more.");
-        return new ComparisonResult(false, string.Join(Environment.NewLine, shown));
+        return new ComparisonResult(false, string.Join(Environment.NewLine, shown)) { Structural = true };
     }
 
     private static void CompareTable(TableSchema expected, TableSchema actual, CompareOptions options, List<string> differences)

@@ -68,8 +68,42 @@ public class WindowTests
         Assert.Contains("Question 3: Products priced between 500 and 2000", texts);
         Assert.Contains("Not quite", texts);
         Assert.Contains("Edge-case data", texts);
+        Assert.Contains("Course data and shifted-ID data", texts); // both passed, so they share one line
         Assert.Contains("Edge Guitar 500", texts); // a cell in the "not expected" table
         Assert.Contains(window.GetLogicalDescendants().OfType<ResultGrid>(), t => t.IsEffectivelyVisible);
+    }
+
+    [AvaloniaFact]
+    public void Wrong_columns_are_shown_once_for_every_dataset()
+    {
+        var question = Content.GetQuestion("mgs-hw1/q3");
+        const string columns = "Expected columns: ProductName, ListPrice, DateAdded. Your columns: ProductName, ListPrice. Missing: DateAdded.";
+        var theirs = new RowSample(["ProductName", "ListPrice"], [["Gibson SG", "1208.42"]], 1);
+        var expected = new RowSample(["ProductName", "ListPrice", "DateAdded"], [["Gibson SG", "1208.42", "2016-02-05 11:04:31"]], 1);
+        DatasetResult Failed(string dataset, string? hint) =>
+            new(dataset, DatasetOutcome.Failed, columns,
+                new ComparisonResult(false, columns) { Structural = true, Actual = theirs, Expected = expected }, hint);
+        var report = new CheckReport(question, [], [], [],
+        [
+            Failed("base", null),
+            Failed("edge", "Check products priced exactly 500 and exactly 2000."),
+            Failed("shifted", "The shifted data has different ID values, in reverse order."),
+        ]);
+
+        var window = new Window { Content = new ResultView { DataContext = new ResultViewModel(report) }, Width = 1100, Height = 600 };
+        window.Show();
+        TestAppBuilder.SaveScreenshot(window, "result-wrong-columns");
+
+        var texts = VisibleTexts(window).ToList();
+        Assert.Contains("See what's different below.", texts);
+        Assert.Single(texts, t => t == "All datasets");
+        Assert.Single(texts, t => t == columns);
+        Assert.DoesNotContain(texts, t => t.StartsWith("Hint:"));
+        Assert.DoesNotContain("Course data", texts);
+
+        // The whole results come from the first dataset, so the header says which one.
+        var expander = window.GetVisualDescendants().OfType<Expander>().Single();
+        Assert.Equal("Show your whole result on course data next to the expected one", expander.Header);
     }
 
     [AvaloniaFact]

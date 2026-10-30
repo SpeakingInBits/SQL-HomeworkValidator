@@ -24,6 +24,9 @@ public sealed record CheckReport(
     IReadOnlyList<DatasetResult> Datasets)
 {
     public bool Passed => Errors.Count == 0 && RuleViolations.Count == 0 && Datasets.All(d => d.Outcome == DatasetOutcome.Passed);
+
+    /// <summary>The dataset results for display: datasets that came out the same share a group, so each problem is shown once.</summary>
+    public IReadOnlyList<DatasetGroup> Groups => DatasetGroup.Group(Datasets);
 }
 
 /// <summary>Raised when a question's own content is broken (bad solution, bad compare options), as opposed to a wrong answer.</summary>

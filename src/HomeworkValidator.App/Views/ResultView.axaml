@@ -39,7 +39,7 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <!-- One section per dataset -->
+        <!-- One section per outcome, naming the datasets it happened on (see DatasetGroup) -->
         <ItemsControl ItemsSource="{Binding Datasets}">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>

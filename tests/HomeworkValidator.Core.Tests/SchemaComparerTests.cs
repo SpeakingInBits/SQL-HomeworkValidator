@@ -102,6 +102,7 @@ public class SchemaComparerTests
 
         Assert.Contains("Table Groups is missing.", result.Message);
         Assert.Contains("Table GroupMembership isn't expected.", result.Message);
+        Assert.True(result.Structural);
     }
 
     [Fact]

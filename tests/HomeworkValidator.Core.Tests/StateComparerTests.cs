@@ -32,6 +32,7 @@ public class StateComparerTests
         Assert.Equal("Categories", result.Table);
         Assert.Contains("Expected Categories to have 2 rows, but it has 1 row.", result.Message);
         Assert.Equal("Brass", result.Missing!.Rows[0][1]);
+        Assert.False(result.Structural);
     }
 
     [Fact]
@@ -59,6 +60,7 @@ public class StateComparerTests
 
         Assert.False(result.Passed);
         Assert.Contains("Expected table InvoiceCopy to exist", result.Message);
+        Assert.True(result.Structural);
     }
 
     [Fact]
@@ -71,6 +73,7 @@ public class StateComparerTests
 
         Assert.False(result.Passed);
         Assert.Contains("table Scratch", result.Message);
+        Assert.True(result.Structural);
     }
 
     [Fact]
