@@ -129,6 +129,29 @@ public class UserJourneyTests
 
     [AvaloniaFact]
     [Trait("Category", "NeedsSqlServer")]
+    public async Task Student_scrolls_sideways_to_the_last_columns_of_a_wide_result()
+    {
+        var app = AppDriver.Launch(new MainViewModel(Content, appDataFolder: TestAppBuilder.NewTempFolder()), "wide-result");
+        await ConnectAsync(app);
+
+        // SELECT * returns all eight Products columns, more than fit in the student's half of the side-by-side view.
+        app.Click(app.TreeItem("3. Products priced between 500"));
+        app.WriteAnswer("SELECT * FROM Products\nWHERE ListPrice > 500 AND ListPrice < 2000\nORDER BY DateAdded DESC;");
+        app.Press(PhysicalKey.F5);
+        await app.WaitUntil(() => app.Shows("Not quite"), "the result of checking SELECT *");
+
+        app.Click(app.SectionHeader("Show your whole result next to the expected one"));
+        app.Screenshot("side-by-side");
+        var column = app.Text("DiscountPercent"); // only the student's result has it
+        Assert.False(app.IsScrolledIntoView(column));
+
+        app.ScrollRight(column);
+        app.Screenshot("scrolled-right");
+        Assert.True(app.IsScrolledIntoView(column));
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "NeedsSqlServer")]
     public async Task Student_works_through_DML_questions()
     {
         var app = AppDriver.Launch(new MainViewModel(Content, appDataFolder: TestAppBuilder.NewTempFolder()), "dml-journey");

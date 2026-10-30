@@ -51,9 +51,13 @@ public class ResultGrid : UserControl
         var frame = new Border { BorderThickness = new Thickness(1, 1, 0, 0), Child = grid };
         BindResource(frame, Border.BorderBrushProperty, "DividerBrush");
 
+        // Results wider than the space they get scroll sideways. AllowAutoHide is off because the Fluent theme's
+        // auto-hiding scroll bar is a thin line drawn over the last row until the mouse is on it, so students
+        // didn't see that there was more to scroll to. Without it the bar is full size and sits below the rows.
         return new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            AllowAutoHide = false,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
             HorizontalAlignment = HorizontalAlignment.Left,
             Content = frame,
