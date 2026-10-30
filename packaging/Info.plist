@@ -11,6 +11,8 @@
     <string>com.speakinginbits.homeworkvalidator</string>
     <key>CFBundleExecutable</key>
     <string>HomeworkValidator</string>
+    <key>CFBundleIconFile</key>
+    <string>icon.icns</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>

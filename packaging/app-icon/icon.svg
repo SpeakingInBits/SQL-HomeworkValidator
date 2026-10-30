@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- The app icon: a database with a check mark. render-icon.cs turns it into icon.ico, icon.icns and icon.png. -->
+  <defs>
+    <clipPath id="body"><path d="M14 18v26c0 4 8 7 16 7s16-3 16-7V18z"/></clipPath>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="13" fill="#0F6E56"/>
+  <path d="M14 18v26c0 4 8 7 16 7s16-3 16-7V18" fill="#FFFFFF"/>
+  <ellipse cx="30" cy="18" rx="16" ry="6" fill="#E1F5EE"/>
+  <!-- The bands between the disks, clipped so their ends don't stick out past the sides -->
+  <path d="M12 27c0 4 10 7 18 7s18-3 18-7M12 36c0 4 10 7 18 7s18-3 18-7" fill="none" stroke="#0F6E56" stroke-width="2.5"
+        clip-path="url(#body)"/>
+  <circle cx="46" cy="46" r="12" fill="#3B9B3B" stroke="#0F6E56" stroke-width="3"/>
+  <path d="M40.5 46.5l4 4 7.5-8.5" fill="none" stroke="#FFFFFF" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
