@@ -1,4 +1,4 @@
-SELECT EmailAddress, COUNT(DISTINCT o.OrderID) AS OrderCount,
+SELECT EmailAddress, COUNT(o.OrderID) AS OrderCount,
        SUM((ItemPrice - DiscountAmount) * Quantity) AS OrderTotal
 FROM Customers c
     JOIN Orders o ON c.CustomerID = o.CustomerID
