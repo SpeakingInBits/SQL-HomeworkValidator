@@ -83,6 +83,10 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      # Velopack's packaging tool. Keep its version the same as the Velopack package in HomeworkValidator.App.csproj.
+      - name: Install vpk
+        run: dotnet tool install --global vpk --version 1.2.161
+
       - name: Build and package
         env:
           VERSION: ${{ needs.version.outputs.version }}
@@ -118,4 +122,6 @@ jobs:
         run: |
           sed "s/{{VERSION}}/$VERSION/g" packaging/release-notes.md > notes.md
           # The install instructions come first, then GitHub's list of changes since the last release.
+          # Installed apps update from the newest release's files (releases/latest/download), so this must be marked latest,
+          # which gh does for the highest version.
           gh release create "v$VERSION" dist/* --target "$GITHUB_SHA" --title "v$VERSION" --notes-file notes.md --generate-notes

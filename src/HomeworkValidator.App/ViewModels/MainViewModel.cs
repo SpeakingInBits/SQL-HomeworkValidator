@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using HomeworkValidator.App.Services;
 using HomeworkValidator.Core.Content;
 using HomeworkValidator.Core.Execution;
@@ -15,21 +16,25 @@ public partial class MainViewModel : ViewModelBase
     private readonly string _appDataFolder;
     private readonly AnswerStore _answers;
     private readonly IPasswordStore _passwords;
+    private readonly IAppUpdater? _updater;
 
     public MainViewModel()
-        : this(LoadContent(out var error), error)
+        : this(LoadContent(out var error), error, updater: new AppUpdater())
     {
     }
 
     /// <param name="appDataFolder">Where settings and answers are kept; tests pass their own folder.</param>
     /// <param name="passwords">Where a remembered password is kept; tests pass their own.</param>
-    public MainViewModel(ContentLibrary? content, string? contentError = null, string? appDataFolder = null, IPasswordStore? passwords = null)
+    /// <param name="updater">Finds newer versions of the app; null (in tests) never finds one.</param>
+    public MainViewModel(ContentLibrary? content, string? contentError = null, string? appDataFolder = null, IPasswordStore? passwords = null,
+        IAppUpdater? updater = null)
     {
         _content = content;
         ContentError = contentError;
         _appDataFolder = appDataFolder ?? AppDataFolder.Root;
         _answers = new AnswerStore(Path.Combine(_appDataFolder, "answers"));
         _passwords = passwords ?? PasswordStore.ForThisComputer();
+        _updater = updater;
         CurrentPage = new ConnectionViewModel(AppSettings.Load(_appDataFolder), _appDataFolder, OnConnected, _passwords);
     }
 
@@ -41,8 +46,26 @@ public partial class MainViewModel : ViewModelBase
 
     public WorkspaceViewModel? Workspace => CurrentPage as WorkspaceViewModel;
 
+    /// <summary>The version of a downloaded update, which installs on restart; null when there's none.</summary>
+    [ObservableProperty]
+    public partial string? UpdateVersion { get; set; }
+
     /// <summary>Saves any unsaved answers; called when the window closes.</summary>
     public void SaveAll() => Workspace?.SaveAnswers();
+
+    /// <summary>Downloads a newer version in the background, if there is one, and offers to restart into it.</summary>
+    public async Task CheckForUpdateAsync()
+    {
+        if (_updater is not null)
+            UpdateVersion = await _updater.DownloadUpdateAsync();
+    }
+
+    [RelayCommand]
+    private void RestartToUpdate()
+    {
+        SaveAll();
+        _updater?.RestartToUpdate();
+    }
 
     private void OnConnected(ServerConnection server, ServerInfo info)
     {

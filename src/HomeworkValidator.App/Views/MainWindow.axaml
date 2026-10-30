@@ -22,10 +22,22 @@
         </DataTemplate>
     </Window.DataTemplates>
 
-    <Panel>
-        <ContentControl Content="{Binding CurrentPage}" IsVisible="{Binding ContentError, Converter={x:Static ObjectConverters.IsNull}}" />
-        <TextBlock Text="{Binding ContentError}"
-                   IsVisible="{Binding ContentError, Converter={x:Static ObjectConverters.IsNotNull}}"
-                   Classes="fail" TextWrapping="Wrap" Margin="32" />
-    </Panel>
+    <DockPanel>
+        <!-- A newer version has been downloaded. It installs the next time the app opens, or now with Restart. -->
+        <Border DockPanel.Dock="Top" Classes="banner pass" Margin="16,8,16,0"
+                IsVisible="{Binding UpdateVersion, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <TextBlock Grid.Column="0" VerticalAlignment="Center" TextWrapping="Wrap"
+                           Text="{Binding UpdateVersion, StringFormat='Version {0} is ready. It installs the next time you open the app, or restart now.'}" />
+                <Button Grid.Column="1" Content="Restart now" Command="{Binding RestartToUpdateCommand}" />
+            </Grid>
+        </Border>
+
+        <Panel>
+            <ContentControl Content="{Binding CurrentPage}" IsVisible="{Binding ContentError, Converter={x:Static ObjectConverters.IsNull}}" />
+            <TextBlock Text="{Binding ContentError}"
+                       IsVisible="{Binding ContentError, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       Classes="fail" TextWrapping="Wrap" Margin="32" />
+        </Panel>
+    </DockPanel>
 </Window>
