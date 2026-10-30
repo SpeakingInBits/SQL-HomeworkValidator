@@ -1,16 +1,31 @@
 #!/usr/bin/env bash
-# Builds the desktop app as a self-contained single file for each runtime and packages it for a release.
+# Builds the desktop app as a self-contained single file for each runtime and packages it with Velopack, so installed
+# copies can update themselves from the GitHub releases.
 #
 #   VERSION=1.2.3 packaging/package.sh <rid>...
 #
-# Run from the repository root. Writes dist/HomeworkValidator-<version>-<rid>.zip, or .tar.gz for Linux, which keeps
-# the executable bit. macOS builds are .app bundles with an ad-hoc signature, which Apple silicon needs before it runs
-# anything. They aren't notarized, so Gatekeeper still warns the first time (see release-notes.md).
+# Run from the repository root, with vpk (dotnet tool install -g vpk) on the PATH at the same version as the Velopack
+# package in HomeworkValidator.App.csproj. Each runtime is its own Velopack channel, named after the runtime, so an
+# installed app only ever updates to its own platform's package. Writes to dist/:
+#
+#   HomeworkValidator-<rid>-Setup.exe       Windows installer (installs for the current user, no admin needed)
+#   HomeworkValidator-<rid>-Portable.zip    Windows folder or macOS .app that runs from anywhere and still updates
+#   HomeworkValidator-<rid>.AppImage        Linux
+#   HomeworkValidator-<version>-<rid>-full.nupkg, releases.<rid>.json   what installed apps download to update
+#
+# Only the macOS packages are built on a Mac. They get an ad-hoc signature, which Apple silicon needs before it runs
+# anything, but aren't notarized, so Gatekeeper still warns the first time (see release-notes.md).
 set -euo pipefail
 
 version=${VERSION:?set VERSION, e.g. VERSION=1.2.3}
 mkdir -p dist
 dist=$(cd dist && pwd)
+
+pack() {
+  # No delta packages: each update downloads the whole app, which keeps the release simple.
+  vpk pack --packId HomeworkValidator --packTitle "SQL Homework Validator" --packAuthors SpeakingInBits \
+    --packVersion "$version" --channel "$rid" --runtime "$rid" --delta None --outputDir "$dist" "$@"
+}
 
 for rid in "$@"; do
   out="out/$rid"
@@ -29,12 +44,11 @@ for rid in "$@"; do
   # Some native packages ship their own debug symbols, which students don't need.
   find "$out/publish" -name '*.pdb' -delete
 
-  name="HomeworkValidator-$version-$rid"
   case "$rid" in
     win-*)
       mv "$out/publish" "$out/HomeworkValidator"
       mv "$out/HomeworkValidator/HomeworkValidator.App.exe" "$out/HomeworkValidator/HomeworkValidator.exe"
-      pwsh -NoProfile -Command "Compress-Archive -Path '$out/HomeworkValidator' -DestinationPath 'dist/$name.zip' -Force"
+      pack --packDir "$out/HomeworkValidator" --mainExe HomeworkValidator.exe
       ;;
     osx-*)
       app="$out/SQL Homework Validator.app"
@@ -43,14 +57,17 @@ for rid in "$@"; do
       mv "$out/publish/"* "$app/Contents/MacOS/"
       mv "$app/Contents/MacOS/HomeworkValidator.App" "$app/Contents/MacOS/HomeworkValidator"
       sed "s/{{VERSION}}/$version/g" packaging/Info.plist > "$app/Contents/Info.plist"
-      codesign --force --deep --sign - "$app"
-      codesign --verify --deep --strict "$app"
-      ditto -c -k --keepParent "$app" "$dist/$name.zip"
+      # vpk adds its updater to the bundle, then signs the whole bundle; "-" is an ad-hoc signature.
+      # No .pkg installer: without a Developer ID it's blocked just like the app, and the zipped .app is simpler.
+      pack --packDir "$app" --mainExe HomeworkValidator --signAppIdentity - --noInst
+      # Check the signature of the bundle students actually get.
+      ditto -x -k "$dist/HomeworkValidator-$rid-Portable.zip" "$out/check"
+      codesign --verify --deep --strict "$out/check/SQL Homework Validator.app"
       ;;
     linux-*)
       mv "$out/publish" "$out/HomeworkValidator"
       mv "$out/HomeworkValidator/HomeworkValidator.App" "$out/HomeworkValidator/HomeworkValidator"
-      tar -czf "$dist/$name.tar.gz" -C "$out" HomeworkValidator
+      pack --packDir "$out/HomeworkValidator" --mainExe HomeworkValidator
       ;;
     *)
       echo "Don't know how to package $rid." >&2

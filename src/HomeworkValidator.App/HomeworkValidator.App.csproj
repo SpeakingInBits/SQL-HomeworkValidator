@@ -24,6 +24,8 @@
     </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="TextMateSharp.Grammars" Version="2.0.4" />
+    <!-- Updates the installed app from the GitHub releases. Keep in step with vpk in .github/workflows/release.yml. -->
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
   <ItemGroup>
