@@ -140,7 +140,7 @@ public class UserJourneyTests
         app.Press(PhysicalKey.F5);
         await app.WaitUntil(() => app.Shows("Not quite"), "the result of checking SELECT *");
 
-        app.Click(app.SectionHeader("Show your whole result next to the expected one"));
+        app.Click(app.SectionHeader("Show your whole result on course data next to the expected one"));
         app.Screenshot("side-by-side");
         var column = app.Text("DiscountPercent"); // only the student's result has it
         Assert.False(app.IsScrolledIntoView(column));
