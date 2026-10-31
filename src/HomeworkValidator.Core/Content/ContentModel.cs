@@ -128,6 +128,10 @@ public enum SqlFeature
     From,
     Where,
     Join,
+
+    /// <summary>An old-style join that lists tables with commas, e.g. <c>FROM Vendors, Invoices WHERE ...</c>. Also counts as <see cref="Join"/>.</summary>
+    ImplicitJoin,
+
     Subquery,
     Cte,
     OrderBy,

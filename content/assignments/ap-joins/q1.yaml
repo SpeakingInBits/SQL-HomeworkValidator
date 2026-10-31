@@ -1,0 +1,9 @@
+title: Vendors joined with their invoices
+prompt: |
+  Write a SELECT statement that returns all columns from the Vendors table inner-joined
+  with the Invoices table. Use the explicit join syntax.
+compare:
+  # SELECT * returns VendorID twice, so columns are matched by position.
+  columns: by-position
+rules:
+  forbid: [ImplicitJoin]

@@ -1,0 +1,11 @@
+# The order assignments appear in the app, by folder name. Every assignment folder must be listed once.
+# To rename one, change the title in its assignment.yaml. Don't rename folders: students' saved answers are filed under them.
+- ap-hw1
+- mgs-hw1
+- ap-joins
+- mgs-joins
+- ap-summary
+- mgs-summary
+- ap-hw2
+- mgs-hw2
+- scripting-hw1

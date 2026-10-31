@@ -1,0 +1,10 @@
+title: Customers who ordered more than one product
+prompt: |
+  Write a SELECT statement that answers this question: Which customers have ordered more
+  than one product? Return these columns:
+
+    The email address from the Customers table
+    The count of distinct products from the customer's orders
+note: The question doesn't name the columns, so only their order is checked.
+compare:
+  columns: by-position

@@ -26,6 +26,7 @@ GO
 
 -- An order placed one second before midnight on New Year's Eve, with an item whose
 -- ItemTotal is exactly 500: (300 - 50) * 2. "ItemTotal > 500" excludes it.
+-- Its last item is priced exactly 400: "ItemPrice greater than 400" excludes it.
 INSERT INTO Orders (CustomerID, OrderDate, ShipAmount, TaxAmount, ShipDate, ShipAddressID,
                     CardType, CardNumber, CardExpires, BillingAddressID)
 VALUES (1, '2016-12-31 23:59:59', 5.00, 32.50, '2017-01-03 09:00:00', 1,
@@ -35,11 +36,19 @@ DECLARE @order int = SCOPE_IDENTITY();
 
 INSERT INTO OrderItems (OrderID, ProductID, ItemPrice, DiscountAmount, Quantity)
 VALUES (@order, 8, 300.00, 50.00, 2),
-       (@order, 1, 699.00, 209.70, 3);
+       (@order, 1, 699.00, 209.70, 3),
+       (@order, 2, 400.00, 0.00, 1);
 
 -- An order placed exactly at midnight that hasn't shipped.
 INSERT INTO Orders (CustomerID, OrderDate, ShipAmount, TaxAmount, ShipDate, ShipAddressID,
                     CardType, CardNumber, CardExpires, BillingAddressID)
 VALUES (2, '2017-01-01 00:00:00', 5.00, 10.00, NULL, 3,
         'Visa', '4012888888881881', '08/2020', 3);
+GO
+
+-- A product in Keyboards, the only category without products in the course data, so a query that names
+-- Keyboards instead of using an outer join fails. Its price is the same as two course products (799.99),
+-- so a self-join on ListPrice returns each of those three products twice unless the query uses DISTINCT.
+INSERT INTO Products (CategoryID, ProductCode, ProductName, Description, ListPrice, DiscountPercent, DateAdded)
+VALUES (4, 'edge_kbd', 'Edge Keyboard', 'The only keyboard.', 799.99, 0.00, '2016-08-04 10:00:00');
 GO

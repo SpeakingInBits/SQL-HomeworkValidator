@@ -1,0 +1,4 @@
+SELECT CASE WHEN ShipDate IS NULL THEN 'NOT SHIPPED' ELSE 'SHIPPED' END AS ShipStatus,
+       OrderID, OrderDate
+FROM Orders
+ORDER BY OrderDate;

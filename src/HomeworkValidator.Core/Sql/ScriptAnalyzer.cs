@@ -242,6 +242,7 @@ public static class ScriptAnalyzer
         SqlFeature.From => "a FROM clause",
         SqlFeature.Where => "a WHERE clause",
         SqlFeature.Join => "a join",
+        SqlFeature.ImplicitJoin => "the implicit join syntax (FROM Table1, Table2 WHERE ...)",
         SqlFeature.Subquery => "a subquery",
         SqlFeature.Cte => "a common table expression (WITH ...)",
         SqlFeature.OrderBy => "an ORDER BY clause",
@@ -402,7 +403,10 @@ public static class ScriptAnalyzer
             Features.Add(SqlFeature.From);
             // FROM a, b is an old-style join.
             if (from.TableReferences.Count > 1)
+            {
                 Features.Add(SqlFeature.Join);
+                Features.Add(SqlFeature.ImplicitJoin);
+            }
         }
     }
 }

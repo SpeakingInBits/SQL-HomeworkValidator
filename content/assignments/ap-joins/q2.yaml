@@ -1,0 +1,15 @@
+title: Invoices with a balance due
+prompt: |
+  Write a SELECT statement that returns four columns:
+
+    VendorName     From the Vendors table
+    InvoiceNumber  From the Invoices table
+    InvoiceDate    From the Invoices table
+    Balance        InvoiceTotal minus the sum of PaymentTotal and CreditTotal
+
+  The result set should have one row for each invoice with a non-zero balance. Sort the
+  result set by VendorName in ascending order. Use the explicit join syntax.
+compare:
+  order: [VendorName]
+rules:
+  forbid: [ImplicitJoin]

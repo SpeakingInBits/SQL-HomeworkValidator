@@ -1,0 +1,18 @@
+title: Vendor totals next to each invoice (optional)
+prompt: |
+  This question is optional. To answer it, you'll need the OVER clause.
+
+  Write a SELECT statement that returns six columns:
+
+    VendorID      From the Invoices table
+    InvoiceDate   From the Invoices table
+    InvoiceTotal  From the Invoices table
+    VendorTotal   The sum of the invoice totals for each vendor
+    VendorCount   The count of invoices for each vendor
+    VendorAvg     The average of the invoice totals for each vendor
+
+  The result set should include the individual invoices for each vendor. (This returns
+  an odd result set, with individual invoice information next to grouped invoice
+  information. That's why this question is optional.)
+compare:
+  decimals: 2

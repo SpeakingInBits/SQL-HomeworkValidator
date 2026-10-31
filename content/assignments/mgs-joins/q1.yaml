@@ -1,0 +1,11 @@
+title: Products with their category names
+prompt: |
+  Write a SELECT statement that joins the Categories table to the Products table and
+  returns these columns: CategoryName, ProductName, ListPrice.
+
+  Sort the result set by CategoryName and then by ProductName in ascending order.
+compare:
+  order: [CategoryName, ProductName]
+hints:
+  edge: >-
+    The edge data has a product with no category. Joining Categories to Products leaves it out.

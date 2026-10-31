@@ -1,0 +1,14 @@
+title: Product count and top price by category
+prompt: |
+  Write a SELECT statement that returns one row for each category that has products,
+  with these columns:
+
+    The CategoryName column from the Categories table
+    The count of the products in the Products table
+    The list price of the most expensive product in the Products table
+
+  Sort the result set so the category with the most products appears first.
+note: The question doesn't name the columns, so only their order is checked.
+compare:
+  columns: by-position
+  order: [ProductCount]

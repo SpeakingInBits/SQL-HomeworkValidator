@@ -1,0 +1,14 @@
+title: Customers with more than one order over 400
+prompt: |
+  Modify the solution to exercise 4 so it only counts and totals line items that have an
+  ItemPrice value that's greater than 400.
+
+  Exercise 4: For each customer with more than 1 order, return the EmailAddress, a count
+  of the number of orders, and the total of (item price minus discount amount) times
+  quantity, sorted in descending sequence by that total.
+note: The question doesn't name the columns, so only their order is checked.
+compare:
+  columns: by-position
+  order: [OrderTotal]
+hints:
+  edge: The edge data has an item priced exactly 400. "Greater than 400" leaves it out.
