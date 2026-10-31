@@ -4,7 +4,63 @@ A cross-platform desktop app that lets students check their SQL Server homework 
 
 Status: SELECT, INSERT/UPDATE/DELETE and database scripting (CREATE/ALTER TABLE, indexes, constraints) questions can be checked in the desktop app or with the command-line tool `hv`. See [PLAN.md](PLAN.md).
 
-## Trying it
+## Installing
+
+Download the app from the [latest release](https://github.com/SpeakingInBits/SQL-HomeworkValidator/releases/latest), under **Assets**. You only download it once: after that the app keeps itself up to date (see [Updates](#updates)).
+
+You also need SQL Server: a local install on Windows, or the Docker image on macOS and Linux.
+
+The app isn't code-signed yet, so Windows and macOS warn you the first time you open it. That's expected.
+
+### Windows
+
+Download the Setup file. It's the one we recommend:
+
+- `HomeworkValidator-win-x64-Setup.exe` for most PCs.
+- `HomeworkValidator-win-arm64-Setup.exe` for PCs with an Arm processor, such as Snapdragon.
+
+1. Double-click the Setup file. If Windows says "Windows protected your PC", click **More info**, then **Run anyway**.
+2. The app installs for your Windows account (no administrator password needed) and opens. Next time, open **SQL Homework Validator** from the Start menu or the desktop.
+
+If you can't run installers, download the `Portable.zip` for your PC instead, right-click it, choose **Extract All**, and open the app from the extracted folder. It updates itself too.
+
+### macOS
+
+- `HomeworkValidator-osx-arm64-Portable.zip` for Macs with Apple silicon (M1 or later).
+- `HomeworkValidator-osx-x64-Portable.zip` for Intel Macs.
+
+1. Double-click the zip file, then drag **SQL Homework Validator** into **Applications**.
+2. Open the app. macOS says it can't verify it. Click **Done**.
+3. Open **System Settings → Privacy & Security**, scroll down and click **Open Anyway** next to the message about SQL Homework Validator. Enter your password and confirm.
+
+Instead of steps 2 and 3, you can run this in Terminal:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/SQL Homework Validator.app"
+```
+
+### Linux
+
+Download `HomeworkValidator-linux-x64.AppImage`, then:
+
+```bash
+chmod +x HomeworkValidator-linux-x64.AppImage
+./HomeworkValidator-linux-x64.AppImage
+```
+
+If it says FUSE is missing, install it (`sudo apt install libfuse2` on Ubuntu 22.04, `libfuse2t64` on 24.04 and later).
+
+The other files in **Assets** (`.nupkg`, `.json`, `RELEASES`) are what installed apps download to update. You don't need them.
+
+### Updates
+
+Don't download new versions by hand. Each time you open the app it checks for a newer version and downloads it in the background. A banner then says the new version is ready: it installs the next time you open the app, or right away with **Restart now**. Your answers and settings are kept.
+
+If you installed version 0.1.0, download the latest version once by hand; it updates itself from then on.
+
+On macOS, if you saved your SQL Server password, macOS asks once after each update whether the app may use it. Click **Always Allow**.
+
+## Building from source
 
 Requires the .NET 10 SDK and a SQL Server you can create databases on.
 
