@@ -38,8 +38,12 @@ public static class ResultComparer
 
     /// <param name="sampleSize">How many missing and unexpected rows to include for display.</param>
     /// <param name="table">When comparing a table after a DML script rather than a query's result: its name, for the messages.</param>
+    /// <param name="sortedBy">
+    /// The columns the student's ORDER BY sorts by, as positions in their result, or null when unknown. When known, every sort key
+    /// must be among them, because rows that only come back in order by chance (say, from a GROUP BY) aren't guaranteed to.
+    /// </param>
     public static ComparisonResult Compare(ResultTable expected, ResultTable actual, CompareOptions options,
-        int sampleSize = DefaultSampleSize, string? table = null)
+        int sampleSize = DefaultSampleSize, string? table = null, IReadOnlyList<int>? sortedBy = null)
     {
         var words = new Wording(table);
 
@@ -73,7 +77,25 @@ public static class ResultComparer
                 Unexpected: unexpected.Count > 0 ? Sample(expected.Columns, unexpected, sampleSize) : null) { Table = table };
         }
 
-        return options.Ordered ? CompareOrder(expected.Columns, expectedRows, actualRows, options.Order) : ComparisonResult.Pass;
+        if (!options.Ordered)
+            return ComparisonResult.Pass;
+
+        var order = CompareOrder(expected.Columns, expectedRows, actualRows, options.Order);
+        return order.Passed && sortedBy is not null ? CompareSortKeys(expected.Columns, map!, options.Order, sortedBy) : order;
+    }
+
+    /// <summary>Fails when the rows are in order but the student's ORDER BY leaves out a sort key.</summary>
+    private static ComparisonResult CompareSortKeys(IReadOnlyList<string> columns, int[] map, IReadOnlyList<OrderKey> order, IReadOnlyList<int> sortedBy)
+    {
+        var left = order.Where(k => !sortedBy.Contains(map[IndexOf(columns, k.Column)])).Select(k => k.Column).ToList();
+        if (left.Count == 0)
+            return ComparisonResult.Pass;
+
+        var keys = string.Join(", then ", order.Select(k => k.Column));
+        var message = sortedBy.Count == 0
+            ? $"The rows happen to be in the right order, but your query has no ORDER BY, so SQL Server could return them in any order. Sort them by {keys}."
+            : $"The rows happen to be in the right order, but your ORDER BY doesn't include {List(left)}, so SQL Server doesn't guarantee that order. Sort them by {keys}.";
+        return new ComparisonResult(false, message) { Structural = true };
     }
 
     /// <summary>The same messages for a query's result ("your query returned...") and for a table ("VendorCopy has...").</summary>

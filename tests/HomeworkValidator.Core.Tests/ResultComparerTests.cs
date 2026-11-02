@@ -181,4 +181,31 @@ public class ResultComparerTests
 
         Assert.Throws<ContentException>(() => ResultComparer.Compare(expected, expected, OrderedBy("Missing")));
     }
+
+    [Fact]
+    public void Rows_in_order_by_chance_fail_when_the_order_by_leaves_out_a_key()
+    {
+        // GROUP BY VendorName, AccountDescription ... ORDER BY VendorName: the rows usually come back sorted by both anyway.
+        var table = Table(["VendorName", "AccountDescription"], ["Abbey", "Furniture"], ["Abbey", "Supplies"], ["Zylka", "Books"]);
+        var options = OrderedBy("VendorName", "AccountDescription");
+
+        var result = ResultComparer.Compare(table, table, options, sortedBy: [0]);
+
+        Assert.False(result.Passed);
+        Assert.Contains("doesn't include AccountDescription", result.Message);
+        Assert.Contains("no ORDER BY", ResultComparer.Compare(table, table, options, sortedBy: []).Message);
+        Assert.True(ResultComparer.Compare(table, table, options, sortedBy: [0, 1]).Passed);
+        Assert.True(ResultComparer.Compare(table, table, options, sortedBy: null).Passed);
+    }
+
+    [Fact]
+    public void Sort_columns_are_matched_through_the_students_column_order()
+    {
+        var expected = Table(["VendorName", "Total"], ["Abbey", 10], ["Zylka", 5]);
+        var actual = Table(["Total", "VendorName"], [10, "Abbey"], [5, "Zylka"]);
+
+        // VendorName is the student's second column.
+        Assert.True(ResultComparer.Compare(expected, actual, OrderedBy("VendorName"), sortedBy: [1]).Passed);
+        Assert.False(ResultComparer.Compare(expected, actual, OrderedBy("VendorName"), sortedBy: [0]).Passed);
+    }
 }

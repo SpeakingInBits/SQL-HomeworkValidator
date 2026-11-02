@@ -120,4 +120,25 @@ public class ScriptAnalyzerTests
         Assert.Contains(violations, v => v.Contains("requires a WHERE clause"));
         Assert.Contains(violations, v => v.Contains("doesn't allow a FROM clause"));
     }
+
+    [Theory]
+    [InlineData("SELECT VendorName, AccountDescription FROM Vendors ORDER BY VendorName, AccountDescription;", new[] { 0, 1 })]
+    [InlineData("SELECT VendorName, AccountDescription FROM Vendors ORDER BY 2 DESC, 1;", new[] { 1, 0 })]
+    [InlineData("SELECT v.VendorName AS Vendor, COUNT(*) AS Total FROM Vendors v GROUP BY v.VendorName ORDER BY Total, [Vendor];", new[] { 1, 0 })]
+    [InlineData("SELECT v.VendorName AS Vendor FROM Vendors v ORDER BY VendorName;", new[] { 0 })]
+    [InlineData("SELECT VendorID, SUM(InvoiceTotal) AS Total FROM Invoices GROUP BY VendorID ORDER BY sum( InvoiceTotal ) DESC;", new[] { 1 })]
+    [InlineData("SELECT VendorName FROM Vendors;", new int[0])]
+    public void Sort_columns_are_found_by_name_alias_position_or_expression(string sql, int[] expected)
+    {
+        Assert.Equal(expected, ScriptAnalyzer.AnalyzeSelect(sql).SortColumns);
+    }
+
+    [Theory]
+    [InlineData("SELECT * FROM Vendors ORDER BY VendorName;")]
+    [InlineData("SELECT VendorName FROM Vendors ORDER BY VendorState, VendorName;")]
+    [InlineData("SELECT VendorName FROM Vendors ORDER BY 3;")]
+    public void Sort_columns_are_unknown_when_the_order_by_names_something_else(string sql)
+    {
+        Assert.Null(ScriptAnalyzer.AnalyzeSelect(sql).SortColumns);
+    }
 }
