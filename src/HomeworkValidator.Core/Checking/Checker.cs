@@ -73,7 +73,7 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, S
             {
                 comparison = question.IsScript
                     ? await CheckScriptAsync(question, database, dataset, analysis.Batches, notes, ct)
-                    : await CheckSelectAsync(question, dataset, DatabaseManager.DatabaseName(database, dataset), analysis.Batches[0], ct);
+                    : await CheckSelectAsync(question, dataset, DatabaseManager.DatabaseName(database, dataset), analysis.Batches[0], analysis.SortColumns, ct);
             }
             catch (QueryFailedException ex)
             {
@@ -89,7 +89,8 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, S
         return new CheckReport(question, [], violations, notes.Distinct().ToList(), results);
     }
 
-    private async Task<ComparisonResult> CheckSelectAsync(Question question, Dataset dataset, string dbName, string query, CancellationToken ct)
+    private async Task<ComparisonResult> CheckSelectAsync(
+        Question question, Dataset dataset, string dbName, string query, IReadOnlyList<int>? sortedBy, CancellationToken ct)
     {
         var actual = await _queries.RunAsync(dbName, query, restricted: true, ct);
 
@@ -102,7 +103,7 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, S
                 return await _queries.RunAsync(dbName, batches[0], restricted: false, ct);
             });
 
-            var comparison = Compare(question, () => ResultComparer.Compare(expected, actual, question.Compare, SampleSize));
+            var comparison = Compare(question, () => ResultComparer.Compare(expected, actual, question.Compare, SampleSize, sortedBy: sortedBy));
             if (FullResultRows > 0)
             {
                 comparison = comparison with

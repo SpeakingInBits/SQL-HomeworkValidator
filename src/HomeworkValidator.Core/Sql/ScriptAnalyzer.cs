@@ -19,6 +19,12 @@ public sealed record ScriptAnalysis(
     /// <summary>True when everything in a DDL script was skipped (e.g. only CREATE DATABASE): nothing runs, but rules still apply.</summary>
     public bool NothingToRun { get; init; }
 
+    /// <summary>
+    /// SELECT questions: the result columns the query's ORDER BY sorts by, as 0-based positions in its select list, in order.
+    /// Empty when there's no ORDER BY; null when the validator can't tell (SELECT *, or sorting by something that isn't a result column).
+    /// </summary>
+    public IReadOnlyList<int>? SortColumns { get; init; }
+
     public bool IsRunnable => Errors.Count == 0 && (Batches.Count > 0 || NothingToRun);
 }
 
@@ -81,8 +87,74 @@ public static class ScriptAnalyzer
             return new ScriptAnalysis(problems, notes, visitor.Features, []);
 
         var only = selects[0];
-        return new ScriptAnalysis([], notes, visitor.Features, [Pad(only.StartLine) + Text(sql, only)]);
+        return new ScriptAnalysis([], notes, visitor.Features, [Pad(only.StartLine) + Text(sql, only)]) { SortColumns = SortColumns(only) };
     }
+
+    /// <summary>The select-list positions the statement's ORDER BY sorts by, or null if any item isn't a result column.</summary>
+    private static IReadOnlyList<int>? SortColumns(SelectStatement select)
+    {
+        var query = select.QueryExpression;
+        // With UNION, the first query names the result columns.
+        if (FirstSpecification(query) is not { } spec || spec.SelectElements.Any(e => e is not SelectScalarExpression))
+            return null;
+        if (query.OrderByClause is null)
+            return [];
+
+        var elements = spec.SelectElements.Cast<SelectScalarExpression>().ToList();
+        var columns = new List<int>();
+        foreach (var item in query.OrderByClause.OrderByElements)
+        {
+            var index = SortColumn(item.Expression, elements);
+            if (index < 0)
+                return null;
+            columns.Add(index);
+        }
+
+        return columns;
+    }
+
+    private static QuerySpecification? FirstSpecification(QueryExpression? query) => query switch
+    {
+        QuerySpecification spec => spec,
+        QueryParenthesisExpression parens => FirstSpecification(parens.QueryExpression),
+        BinaryQueryExpression binary => FirstSpecification(binary.FirstQueryExpression),
+        _ => null,
+    };
+
+    private static int SortColumn(ScalarExpression expression, List<SelectScalarExpression> elements)
+    {
+        // ORDER BY 2 sorts by the second column.
+        if (expression is IntegerLiteral literal)
+            return int.TryParse(literal.Value, out var position) && position >= 1 && position <= elements.Count ? position - 1 : -1;
+
+        // An alias, as SQL Server looks for one first: ORDER BY LineItemSum.
+        if (expression is ColumnReferenceExpression { MultiPartIdentifier.Count: 1 } named)
+        {
+            var name = named.MultiPartIdentifier.Identifiers[0].Value;
+            var alias = elements.FindIndex(e => string.Equals(e.ColumnName?.Value, name, StringComparison.OrdinalIgnoreCase));
+            if (alias >= 0)
+                return alias;
+        }
+
+        // The same column or expression as a select element: ORDER BY v.VendorName, or ORDER BY SUM(InvoiceTotal).
+        return elements.FindIndex(e => SameValue(e.Expression, expression));
+    }
+
+    private static bool SameValue(ScalarExpression a, ScalarExpression b)
+    {
+        // v.VendorName and VendorName: compare the column names, ignoring table aliases and brackets.
+        if (a is ColumnReferenceExpression { MultiPartIdentifier: { } left } && b is ColumnReferenceExpression { MultiPartIdentifier: { } right })
+            return string.Equals(left.Identifiers[^1].Value, right.Identifiers[^1].Value, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(Tokens(a), Tokens(b), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A fragment's tokens without whitespace or comments, so formatting differences don't matter.</summary>
+    private static string Tokens(TSqlFragment fragment) =>
+        string.Concat(fragment.ScriptTokenStream
+            .Skip(fragment.FirstTokenIndex)
+            .Take(fragment.LastTokenIndex - fragment.FirstTokenIndex + 1)
+            .Where(t => t.TokenType is not (TSqlTokenType.WhiteSpace or TSqlTokenType.SingleLineComment or TSqlTokenType.MultilineComment))
+            .Select(t => t.Text));
 
     /// <summary>
     /// Analyzes a script for a DML question: INSERT, UPDATE, DELETE, SELECT (including INTO), DROP TABLE and
