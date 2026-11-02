@@ -72,6 +72,8 @@ dotnet run --project src/HomeworkValidator.App
 
 Connect to your server, pick a question, write a query and press F5 (or Check). The first connection builds the validator's databases, which takes a few seconds. Answers and pass/fail status are saved automatically in your user profile (`%APPDATA%\HomeworkValidator` on Windows, `~/.config/HomeworkValidator` elsewhere). With SQL Server authentication you can tick "Remember my password", which keeps it in Windows Credential Manager, the macOS keychain or your Linux keyring; otherwise it isn't saved.
 
+To get suggestions while you type, turn on **Settings > Autocomplete as you type**. After FROM or JOIN it lists tables. In SELECT, WHERE, ON, GROUP BY and ORDER BY it lists the columns of the tables in your FROM clause, so you don't have to type the table name first. After `alias.` it lists only that table's columns. Tab or Enter picks a suggestion, Esc or a space closes the list, and Ctrl+Space shows it again. It's off by default.
+
 ### Command line
 
 ```bash

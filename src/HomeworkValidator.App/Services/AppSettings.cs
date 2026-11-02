@@ -3,12 +3,18 @@ using System.Text.Json.Serialization;
 
 namespace HomeworkValidator.App.Services;
 
-/// <summary>The connection details the student used last. The password is never saved here; see <see cref="IPasswordStore"/>.</summary>
+/// <summary>
+/// The connection details the student used last, and their choices in the Settings menu.
+/// The password is never saved here; see <see cref="IPasswordStore"/>.
+/// </summary>
 public sealed class AppSettings
 {
     public string? Server { get; set; }
     public bool UseWindowsAuthentication { get; set; } = OperatingSystem.IsWindows();
     public string? User { get; set; }
+
+    /// <summary>Suggest keywords, tables and columns while typing in the editor. Off unless the student turns it on.</summary>
+    public bool AutoComplete { get; set; }
 
     private static string FilePath(string folder) => Path.Combine(folder, "settings.json");
 

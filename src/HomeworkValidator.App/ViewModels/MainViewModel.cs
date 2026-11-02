@@ -17,6 +17,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly AnswerStore _answers;
     private readonly IPasswordStore _passwords;
     private readonly IAppUpdater? _updater;
+    private readonly AppSettings _settings;
 
     public MainViewModel()
         : this(LoadContent(out var error), error, updater: new AppUpdater())
@@ -35,7 +36,8 @@ public partial class MainViewModel : ViewModelBase
         _answers = new AnswerStore(Path.Combine(_appDataFolder, "answers"));
         _passwords = passwords ?? PasswordStore.ForThisComputer();
         _updater = updater;
-        CurrentPage = new ConnectionViewModel(AppSettings.Load(_appDataFolder), _appDataFolder, OnConnected, _passwords);
+        _settings = AppSettings.Load(_appDataFolder);
+        CurrentPage = new ConnectionViewModel(_settings, _appDataFolder, OnConnected, _passwords);
     }
 
     /// <summary>Set when the course content couldn't be loaded; the app can't do anything useful then.</summary>
@@ -72,7 +74,7 @@ public partial class MainViewModel : ViewModelBase
         if (_content is null)
             return;
 
-        var workspace = new WorkspaceViewModel(_content, server, info, _answers, ChangeConnection);
+        var workspace = new WorkspaceViewModel(_content, server, info, _answers, ChangeConnection, _settings, () => _settings.Save(_appDataFolder));
         CurrentPage = workspace;
         _ = workspace.SetUpDatabasesAsync();
     }
@@ -80,7 +82,7 @@ public partial class MainViewModel : ViewModelBase
     private void ChangeConnection()
     {
         SaveAll();
-        CurrentPage = new ConnectionViewModel(AppSettings.Load(_appDataFolder), _appDataFolder, OnConnected, _passwords);
+        CurrentPage = new ConnectionViewModel(_settings, _appDataFolder, OnConnected, _passwords);
     }
 
     private static ContentLibrary? LoadContent(out string? error)
