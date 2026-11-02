@@ -99,10 +99,11 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  # Pull requests run this too, up to creating the release, so a release-notes link that doesn't match a package shows up
+  # before a release.
   release:
     name: release
     needs: [version, build]
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -115,15 +116,21 @@ jobs:
           merge-multiple: true
           path: dist
 
-      - name: Create the release
+      - name: Write the release notes
         env:
-          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           # vpk also writes assets.<rid>.json (its own list of what it built) and RELEASES-<rid> (an older update list).
           # The app's updater reads neither, only releases.<rid>.json and the .nupkg, so they'd only clutter the release.
           rm -f dist/assets.*.json dist/RELEASES-*
-          sed "s/{{VERSION}}/$VERSION/g" packaging/release-notes.md > notes.md
+          bash packaging/release-notes.sh dist > notes.md
+
+      - name: Create the release
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
           # The install instructions come first, then GitHub's list of changes since the last release.
           # Installed apps update from the newest release's files (releases/latest/download), so this must be marked latest,
           # which gh does for the highest version.
