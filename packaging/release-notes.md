@@ -44,4 +44,4 @@ chmod +x HomeworkValidator-linux-x64.AppImage
 
 If it says FUSE is missing, install it (`sudo apt install libfuse2` on Ubuntu 22.04, `libfuse2t64` on 24.04 and later).
 
-The other files in **Assets** (`.nupkg`, `.json`, `RELEASES`) are what installed apps download to update. You don't need them.
+The other files in **Assets** (`.nupkg`, `.json`) are what installed apps download to update. You don't need them.
