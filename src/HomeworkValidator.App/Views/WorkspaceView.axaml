@@ -24,7 +24,7 @@
         <!-- Top bar: server, database status, actions -->
         <Border Grid.Row="0" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}"
                 BorderThickness="0,0,0,1" Padding="16,8">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="12">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="12">
                 <TextBlock Grid.Column="0" Classes="muted" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                            Text="{Binding ServerDescription}" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -34,6 +34,16 @@
                 <Button Grid.Column="2" Content="Set up databases" Command="{Binding SetUpDatabasesCommand}"
                         IsVisible="{Binding !DatabasesReady}" />
                 <Button Grid.Column="3" Content="Change connection" Command="{Binding ChangeConnectionCommand}" />
+                <!-- Choices the student can change. They're saved in settings.json with the connection details. -->
+                <Button Grid.Column="4" Content="Settings">
+                    <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                            <MenuItem Header="Autocomplete as you type" ToggleType="CheckBox"
+                                      IsChecked="{Binding AutoComplete, Mode=TwoWay}"
+                                      ToolTip.Tip="Suggests keywords, tables and columns while you type. Ctrl+Space shows them at any time." />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
             </Grid>
         </Border>
 

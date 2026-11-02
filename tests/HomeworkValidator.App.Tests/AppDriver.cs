@@ -57,6 +57,11 @@ public sealed class AppDriver
     }
 
     public Button Button(string label) => Find<Button>(b => b.Content as string == label, $"a button labeled '{label}'");
+
+    /// <summary>An item in the menu that a button opens, e.g. the Settings menu. Click the button first to open it.</summary>
+    public MenuItem MenuItem(string button, string header) =>
+        (Button(button).Flyout as MenuFlyout)?.Items.OfType<MenuItem>().FirstOrDefault(m => m.Header as string == header && m.IsEffectivelyVisible)
+        ?? throw new InvalidOperationException($"The '{button}' menu has no item '{header}' showing. Was it opened?");
     public RadioButton RadioButton(string label) => Find<RadioButton>(b => b.Content as string == label, $"an option labeled '{label}'");
 
     /// <summary>The text box under a label, e.g. "Server" or "Password".</summary>
@@ -97,34 +102,39 @@ public sealed class AppDriver
 
     // ----- Acting -----
 
-    /// <summary>Moves the mouse to the middle of the control and clicks.</summary>
+    /// <summary>Moves the mouse to the middle of the control and clicks. The control can be in a popup, such as a menu.</summary>
     public void Click(Control control)
     {
+        var root = RootOf(control);
         var center = PointOn(control);
-        Window.MouseMove(center);
-        Window.MouseDown(center, MouseButton.Left);
-        Window.MouseUp(center, MouseButton.Left);
+        root.MouseMove(center);
+        root.MouseDown(center, MouseButton.Left);
+        root.MouseUp(center, MouseButton.Left);
         Dispatcher.UIThread.RunJobs();
     }
+
+    /// <summary>The window, or the popup the control is in. A menu or flyout opens in a popup of its own.</summary>
+    private TopLevel RootOf(Control control) => TopLevel.GetTopLevel(control) ?? Window;
 
     /// <summary>Where the mouse goes to use the control: its middle, once it's on screen and nothing covers it.</summary>
     private Point PointOn(Control control)
     {
         // Scroll it into view, then let layout and rendering catch up so positions and hit testing are current.
+        var root = RootOf(control);
         control.BringIntoView();
-        Window.UpdateLayout();
+        root.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
-        Window.CaptureRenderedFrame()?.Dispose(); // hit testing uses the last rendered frame
-        var center = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), Window)
+        root.CaptureRenderedFrame()?.Dispose(); // hit testing uses the last rendered frame
+        var center = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), root)
             ?? throw new InvalidOperationException($"{control.GetType().Name} isn't in the window.");
 
         // A student can only click what they can see. If something else is on top (a scrollbar, another panel),
         // the click would land there, so fail with a clear message instead of a confusing one later.
-        if (Window.InputHitTest(center) is not Visual hit || (hit != control && !hit.GetVisualAncestors().Contains(control)))
+        if (root.InputHitTest(center) is not Visual hit || (hit != control && !hit.GetVisualAncestors().Contains(control)))
         {
             var screenshot = Screenshot("blocked-click");
             throw new InvalidOperationException(
-                $"Clicking the middle of the {control.GetType().Name} at {center} would hit {Describe(Window.InputHitTest(center))} instead. Screenshot: {screenshot}");
+                $"Clicking the middle of the {control.GetType().Name} at {center} would hit {Describe(root.InputHitTest(center))} instead. Screenshot: {screenshot}");
         }
 
         return center;

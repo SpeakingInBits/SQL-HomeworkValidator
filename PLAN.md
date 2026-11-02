@@ -15,7 +15,7 @@ A cross-platform desktop app that lets students check their SQL homework against
 | Expected results | Computed live by running the reference solution next to the student's | No build step, no stored results to keep in sync, and questions using `GETDATE()` work because both queries run at the same moment. |
 | T-SQL parsing | `Microsoft.SqlServer.TransactSql.ScriptDom` | Microsoft's official parser. Needed for the database-rename safety step and for rules like "must use a JOIN". |
 | SQL Server driver | `Microsoft.Data.SqlClient` | Official, cross-platform. |
-| SQL editor | AvaloniaEdit | SQL syntax highlighting, line numbers. |
+| SQL editor | AvaloniaEdit | SQL syntax highlighting, line numbers, and optional autocomplete (its CompletionWindow, filled by `SqlCompletion` in Core). |
 
 ## Repository layout
 
@@ -272,7 +272,7 @@ Probe names are shown to the student when a probe behaves differently, so write 
 1. **Connection:** server, authentication, login and password, with "Remember my password" for SQL authentication. Connecting also checks that the login can create databases.
 2. **Setup status:** a bar across the top. The `HV_` databases are built or updated automatically after connecting, with progress shown; a "Set up databases" button retries if that failed.
 3. **Assignments:** a tree of assignments and questions, each marked passed, failed or not checked. Status is saved between sessions.
-4. **Question:** prompt, SQL editor with syntax highlighting (AvaloniaEdit + TextMate), "Open .sql file", and Check (F5 or Ctrl+Enter). Answers are saved automatically. An opened file stays linked for the session: saving it in another editor (SSMS, VS Code) reloads the answer, checked every second and again before each check. If the student also changed the answer in the app, it asks which to keep.
+4. **Question:** prompt, SQL editor with syntax highlighting (AvaloniaEdit + TextMate), "Open .sql file", and Check (F5 or Ctrl+Enter). Answers are saved automatically. An opened file stays linked for the session: saving it in another editor (SSMS, VS Code) reloads the answer, checked every second and again before each check. If the student also changed the answer in the app, it asks which to keep. With **Settings > Autocomplete as you type** on (off by default, saved in settings.json), the editor suggests keywords, functions, tables and columns. Table and column names come from the database's schema.sql, so suggestions work before the databases are set up.
 5. **Results:** a pass/fail banner, then per dataset: the message, tables of missing rows and rows that shouldn't be there (up to 25 each), the hint, and a collapsed section with the student's whole result next to the expected one, each in the order it came back (up to 100 rows each; for scripts, the first table that differs). Also notes (such as an ignored USE), errors and rule violations. A "Show solution" toggle appears once the assignment's `showSolutions` allows it, and shows the reference solution and any alternatives above the results.
 
 ## Distribution

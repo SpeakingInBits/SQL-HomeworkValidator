@@ -6,6 +6,7 @@ using HomeworkValidator.App.Services;
 using HomeworkValidator.Core.Checking;
 using HomeworkValidator.Core.Content;
 using HomeworkValidator.Core.Execution;
+using HomeworkValidator.Core.Sql;
 using Microsoft.Data.SqlClient;
 
 namespace HomeworkValidator.App.ViewModels;
@@ -26,12 +27,21 @@ public partial class WorkspaceViewModel : ViewModelBase
     private readonly Action _changeConnection;
     private readonly DispatcherTimer _autoSave;
     private readonly DispatcherTimer _fileWatch;
+    private readonly AppSettings _settings;
+    private readonly Action _saveSettings;
+    private readonly Dictionary<string, SqlCatalog> _catalogs = new(StringComparer.OrdinalIgnoreCase);
 
-    public WorkspaceViewModel(ContentLibrary content, ServerConnection server, ServerInfo info, AnswerStore answers, Action changeConnection)
+    /// <param name="settings">The Settings menu's choices; tests leave it out to start from the defaults.</param>
+    /// <param name="saveSettings">Saves <paramref name="settings"/> after the student changes one.</param>
+    public WorkspaceViewModel(ContentLibrary content, ServerConnection server, ServerInfo info, AnswerStore answers, Action changeConnection,
+        AppSettings? settings = null, Action? saveSettings = null)
     {
         _content = content;
         _answers = answers;
         _changeConnection = changeConnection;
+        _settings = settings ?? new AppSettings();
+        _saveSettings = saveSettings ?? (() => { });
+        AutoComplete = _settings.AutoComplete;
         _databases = new DatabaseManager(server);
         _checker = new Checker(content, _databases, server) { SampleSize = SampleSize, FullResultRows = FullResultRows };
 
@@ -80,6 +90,33 @@ public partial class WorkspaceViewModel : ViewModelBase
     public partial string? Problem { get; set; }
 
     partial void OnSelectedNodeChanged(object? oldValue, object? newValue) => SaveAnswers();
+
+    /// <summary>Suggest keywords, tables and columns while typing (Settings menu). Remembered for next time.</summary>
+    [ObservableProperty]
+    public partial bool AutoComplete { get; set; }
+
+    partial void OnAutoCompleteChanged(bool value)
+    {
+        if (_settings.AutoComplete == value)
+            return;
+        _settings.AutoComplete = value;
+        _saveSettings();
+    }
+
+    /// <summary>The tables and columns of the selected question's database, for suggestions in the editor.</summary>
+    public SqlCatalog Catalog
+    {
+        get
+        {
+            if (SelectedQuestion?.Question.Database is not { } name)
+                return SqlCatalog.Empty;
+            if (!_catalogs.TryGetValue(name, out var catalog))
+                _catalogs[name] = catalog = _content.Databases.FirstOrDefault(d => d.Name.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } database
+                    ? SqlCatalog.FromScript(database.SchemaSql)
+                    : SqlCatalog.Empty;
+            return catalog;
+        }
+    }
 
     /// <summary>Creates or updates the validator's HV_ databases. Runs on connect and from the Set up button.</summary>
     [RelayCommand(CanExecute = nameof(IsIdle))]
