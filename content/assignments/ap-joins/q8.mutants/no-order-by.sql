@@ -1,0 +1,7 @@
+SELECT VendorName, 'CA' AS VendorState
+FROM Vendors
+WHERE VendorState = 'CA'
+UNION
+SELECT VendorName, 'Outside CA'
+FROM Vendors
+WHERE VendorState <> 'CA';
