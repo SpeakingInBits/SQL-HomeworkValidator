@@ -8,18 +8,18 @@ After that, the app keeps itself up to date. When a new version is out, it downl
 
 ### Windows
 
-- `HomeworkValidator-win-x64-Setup.exe` for most PCs.
-- `HomeworkValidator-win-arm64-Setup.exe` for PCs with an Arm processor, such as Snapdragon.
+- [`HomeworkValidator-win-x64-Setup.exe`](https://github.com/SpeakingInBits/SQL-HomeworkValidator/releases/download/v{{VERSION}}/HomeworkValidator-win-x64-Setup.exe) for most PCs.
+- [`HomeworkValidator-win-arm64-Setup.exe`](https://github.com/SpeakingInBits/SQL-HomeworkValidator/releases/download/v{{VERSION}}/HomeworkValidator-win-arm64-Setup.exe) for PCs with an Arm processor, such as Snapdragon.
 
 1. Double-click the Setup file. If Windows says "Windows protected your PC", click **More info**, then **Run anyway**.
 2. The app installs for your Windows account (no administrator password needed) and opens. Next time, open **SQL Homework Validator** from the Start menu or the desktop.
 
-If you can't run installers, download the `Portable.zip` for your PC instead, right-click it, choose **Extract All**, and double-click `SQL Homework Validator.exe` in the extracted folder.
+If you can't run installers, download [`HomeworkValidator-win-x64-Portable.zip`](https://github.com/SpeakingInBits/SQL-HomeworkValidator/releases/download/v{{VERSION}}/HomeworkValidator-win-x64-Portable.zip) (or [`HomeworkValidator-win-arm64-Portable.zip`](https://github.com/SpeakingInBits/SQL-HomeworkValidator/releases/download/v{{VERSION}}/HomeworkValidator-win-arm64-Portable.zip) for Arm) instead, right-click it, choose **Extract All**, and double-click `SQL Homework Validator.exe` in the extracted folder.
 
 ### macOS
 
-- `HomeworkValidator-osx-arm64-Portable.zip` for Macs with Apple silicon (M1 or later).
-- `HomeworkValidator-osx-x64-Portable.zip` for Intel Macs.
+- [`HomeworkValidator-osx-arm64-Portable.zip`](https://github.com/SpeakingInBits/SQL-HomeworkValidator/releases/download/v{{VERSION}}/HomeworkValidator-osx-arm64-Portable.zip) for Macs with Apple silicon (M1 or later).
+- [`HomeworkValidator-osx-x64-Portable.zip`](https://github.com/SpeakingInBits/SQL-HomeworkValidator/releases/download/v{{VERSION}}/HomeworkValidator-osx-x64-Portable.zip) for Intel Macs.
 
 1. Double-click the zip file, then drag **SQL Homework Validator** into **Applications**.
 2. Open the app. macOS says it can't verify it. Click **Done**.
@@ -35,7 +35,7 @@ If you saved your SQL Server password, macOS asks once after each update whether
 
 ### Linux
 
-Download `HomeworkValidator-linux-x64.AppImage`, then:
+Download [`HomeworkValidator-linux-x64.AppImage`](https://github.com/SpeakingInBits/SQL-HomeworkValidator/releases/download/v{{VERSION}}/HomeworkValidator-linux-x64.AppImage), then:
 
 ```bash
 chmod +x HomeworkValidator-linux-x64.AppImage
@@ -44,4 +44,4 @@ chmod +x HomeworkValidator-linux-x64.AppImage
 
 If it says FUSE is missing, install it (`sudo apt install libfuse2` on Ubuntu 22.04, `libfuse2t64` on 24.04 and later).
 
-The other files in **Assets** (`.nupkg`, `.json`, `RELEASES`) are what installed apps download to update. You don't need them.
+The other files in **Assets** (`.nupkg`, `.json`) are what installed apps download to update. You don't need them.
