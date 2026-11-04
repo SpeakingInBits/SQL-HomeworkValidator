@@ -38,6 +38,37 @@ public partial class WorkspaceView : UserControl
         Editor.DocumentChanged += (_, _) => _completion?.Close();
     }
 
+    private WorkspaceViewModel? _workspace;
+    private VisualizerWindow? _visualizer;
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        _workspace?.VisualizerReady -= ShowVisualizer;
+        _workspace = DataContext as WorkspaceViewModel;
+        _workspace?.VisualizerReady += ShowVisualizer;
+    }
+
+    /// <summary>Opens the visualizer, or shows the new animation in the one that's already open.</summary>
+    private void ShowVisualizer(VisualizerViewModel animation)
+    {
+        if (_visualizer is { } open)
+        {
+            (open.DataContext as VisualizerViewModel)?.Pause();
+            open.DataContext = animation;
+            open.Activate();
+            return;
+        }
+
+        var window = new VisualizerWindow { DataContext = animation };
+        window.Closed += (_, _) => _visualizer = null;
+        _visualizer = window;
+        if (TopLevel.GetTopLevel(this) is Window owner)
+            window.Show(owner);
+        else
+            window.Show();
+    }
+
     private CompletionWindow? _completion;
 
     private bool AutoComplete => DataContext is WorkspaceViewModel { AutoComplete: true };

@@ -100,6 +100,48 @@ public sealed class AppDriver
         return topLeft.X >= 0 && topLeft.X + control.Bounds.Width <= scroller.Viewport.Width;
     }
 
+    // ----- The visualizer window -----
+
+    /// <summary>The visualizer, if it's open.</summary>
+    public VisualizerWindow? Visualizer => Window.OwnedWindows.OfType<VisualizerWindow>().FirstOrDefault();
+
+    public async Task<VisualizerWindow> WaitForVisualizerAsync()
+    {
+        await WaitUntil(() => Visualizer is not null, "the visualizer to open");
+        var window = Visualizer!;
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        return window;
+    }
+
+    public bool VisualizerShows(string text) =>
+        Visualizer!.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == text && t.IsEffectivelyVisible);
+
+    public Button VisualizerButton(string label) =>
+        Visualizer!.GetVisualDescendants().OfType<Button>().Single(b => b.Content as string == label);
+
+    public CheckBox VisualizerCheckBox(string label) =>
+        Visualizer!.GetVisualDescendants().OfType<CheckBox>().Single(b => b.Content as string == label);
+
+    public void VisualizerScreenshot(VisualizerWindow window, string step) => TestAppBuilder.SaveScreenshot(window, $"{Name}-{step}");
+
+    /// <summary>True if a visible selectable text, such as a message under the buttons, starts this way.</summary>
+    public bool ShowsSelectableTextStartingWith(string prefix) =>
+        Visible<SelectableTextBlock>().Any(t => t.Text?.StartsWith(prefix, StringComparison.Ordinal) == true);
+
+    /// <summary>True if a button with this label can be seen.</summary>
+    public bool VisibleButton(string label) => Visible<Button>().Any(b => b.Content as string == label);
+
+    /// <summary>Presses a key in another window of the app.</summary>
+    public void PressIn(Window window, PhysicalKey key)
+    {
+        window.KeyPressQwerty(key, RawInputModifiers.None);
+        // The key may have closed the window, and then there's nothing left to send the release to.
+        if (window.PlatformImpl is not null)
+            window.KeyReleaseQwerty(key, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+    }
+
     // ----- Acting -----
 
     /// <summary>Moves the mouse to the middle of the control and clicks. The control can be in a popup, such as a menu.</summary>
