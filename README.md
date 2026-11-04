@@ -2,6 +2,8 @@
 
 A cross-platform desktop app that lets students check their SQL Server homework against the instructor's solutions. Students connect it to their own SQL Server (a local install on Windows, Docker on macOS and Linux), and it compares their query results against the reference solution on several test datasets.
 
+See the [website](https://speakinginbits.github.io/SQL-HomeworkValidator/) for screenshots and a list of features.
+
 Status: SELECT, INSERT/UPDATE/DELETE and database scripting (CREATE/ALTER TABLE, indexes, constraints) questions can be checked in the desktop app or with the command-line tool `hv`. See [PLAN.md](PLAN.md).
 
 ## Installing
@@ -119,6 +121,18 @@ To build a package locally, from the repository root (macOS packages need a Mac,
 
 ```bash
 VERSION=0.0.1 packaging/package.sh win-x64
+```
+
+## Website
+
+The website is `site/index.html`, published to [GitHub Pages](https://speakinginbits.github.io/SQL-HomeworkValidator/) by `.github/workflows/pages.yml` whenever it changes on `main`.
+
+Near the top it says which version it was last updated for. When you bring the page up to date with a release, change that version, in the line under the comment that mentions this section.
+
+To retake the screenshots, connect to a SQL Server that has the validator's databases and run this from the repository root. They're taken with queries that aren't homework answers, as the website is public.
+
+```bash
+HV_WEBSITE_IMAGES="$PWD/site/images" HV_TEST_CONNECTION_STRING="Server=localhost;Integrated Security=true;TrustServerCertificate=true" dotnet test tests/HomeworkValidator.App.Tests --filter "Category=WebsiteScreenshots"
 ```
 
 ## Adding questions
