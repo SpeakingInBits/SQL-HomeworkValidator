@@ -20,10 +20,13 @@ public sealed record ShapeColumn(string Prefix, string Name);
 /// <param name="OnColumns">The columns the ON condition reads, to work out which earlier table it connects to.</param>
 public sealed record ShapeJoin(string Type, string? On, IReadOnlyList<ShapeColumn> OnColumns);
 
+/// <summary>A value shown for each row before grouping: a group key, or what an aggregate reads.</summary>
+public sealed record ShapeRowColumn(string Header, string Expression);
+
 /// <summary>
-/// The parts of a SELECT the visualizer shows, found with ScriptDom. It also writes the query that asks SQL Server what
+/// The parts of a SELECT the visualizer shows, found with ScriptDom. It also writes the queries that ask SQL Server what
 /// happens to each row: the same FROM, select list and ORDER BY as the student's query, so the server's own semantics
-/// (outer joins, NULLs, sorting) decide everything and nothing here reimplements them.
+/// (outer joins, NULLs, grouping, sorting) decide everything and nothing here reimplements them.
 /// </summary>
 public sealed class QueryShape
 {
@@ -39,6 +42,7 @@ public sealed class QueryShape
     private int _fromOffset;
     private string _selectList = "";
     private string _orderBy = "";
+    private string _groupBy = "";
 
     private QueryShape(string query) => Query = query;
 
@@ -67,9 +71,41 @@ public sealed class QueryShape
 
     /// <summary>
     /// Columns the WHERE and ORDER BY read but the select list leaves out, as written. They're shown next to the row so
-    /// students can see why it passes or where it sorts to.
+    /// students can see why it passes or where it sorts to. Not used by grouped queries, whose rows show <see cref="RowColumns"/>.
     /// </summary>
     public IReadOnlyList<string> ExtraColumns { get; private set; } = [];
+
+    /// <summary>True when rows collapse into groups: GROUP BY, HAVING, or an aggregate over all the rows.</summary>
+    public bool IsGrouped { get; private set; }
+
+    /// <summary>True when the query has window functions, which work on groups of rows but keep every row.</summary>
+    public bool IsWindowed { get; private set; }
+
+    /// <summary>What rows are grouped by: GROUP BY's items, or the PARTITION BY of the query's first window function.</summary>
+    public IReadOnlyList<string> GroupKeys { get; private set; } = [];
+
+    /// <summary>The clause to show for the grouping step, e.g. <c>GROUP BY VendorState</c>; null if there's none to quote.</summary>
+    public string? GroupClause { get; private set; }
+
+    /// <summary>The ROLLUP or CUBE that adds summary rows, as students wrote it; null without one.</summary>
+    public string? SummaryRows { get; private set; }
+
+    /// <summary>The HAVING clause without the keyword; null if there's none.</summary>
+    public string? Having { get; private set; }
+
+    /// <summary>The HAVING clause split at its top-level ANDs.</summary>
+    public IReadOnlyList<string> HavingConditions { get; private set; } = [];
+
+    /// <summary>What to show for each row before it's grouped. The first <see cref="KeyColumns"/> are the group keys.</summary>
+    public IReadOnlyList<ShapeRowColumn> RowColumns { get; private set; } = [];
+
+    public int KeyColumns { get; private set; }
+
+    /// <summary>Positions in the select list of its calculated columns, as opposed to plain columns.</summary>
+    public IReadOnlyList<int> CalculatedColumns { get; private set; } = [];
+
+    /// <summary>True when window functions partition differently. Only the first one's partitions are shown.</summary>
+    public bool MixedPartitions { get; private set; }
 
     public static QueryShape Analyze(string sql)
     {
@@ -85,7 +121,7 @@ public sealed class QueryShape
             ? shape
             : new QueryShape(query)
             {
-                Problems = [$"The visualizer can't show {unsupported} yet. It shows queries that use joins, WHERE, ORDER BY, DISTINCT and TOP."],
+                Problems = [$"The visualizer can't show {unsupported} yet. It shows joins, WHERE, GROUP BY, HAVING, window functions, ORDER BY, DISTINCT and TOP."],
             };
     }
 
@@ -103,10 +139,6 @@ public sealed class QueryShape
         if (expression is not QuerySpecification spec)
             return "this kind of query";
 
-        if (spec.GroupByClause is not null)
-            return "GROUP BY";
-        if (spec.HavingClause is not null)
-            return "HAVING";
         if (spec.FromClause is null)
             return "a query without a FROM clause";
         if (select.QueryExpression.OffsetClause is not null || spec.OffsetClause is not null)
@@ -121,10 +153,12 @@ public sealed class QueryShape
         foreach (var element in spec.SelectElements)
             element.Accept(functions);
         orderBy?.Accept(functions);
-        if (functions.Window)
-            return "window functions (OVER)";
-        if (functions.Aggregate)
-            return "aggregate functions such as COUNT and SUM";
+        spec.HavingClause?.SearchCondition?.Accept(functions);
+
+        IsGrouped = spec.GroupByClause is not null || spec.HavingClause is not null || functions.HasAggregate;
+        IsWindowed = functions.Windows.Count > 0;
+        if (IsGrouped && IsWindowed)
+            return "window functions in a query with GROUP BY";
 
         var sources = new List<NamedTableReference>();
         var joins = new List<ShapeJoin>();
@@ -140,6 +174,24 @@ public sealed class QueryShape
         // Each table's row numbers are among the columns * expands to, which would move every column after the first table.
         if (sources.Count > 1 && spec.SelectElements.Any(e => e is SelectStarExpression) && orderBy?.OrderByElements.Any(e => e.Expression is IntegerLiteral) == true)
             return "ORDER BY with a column number after SELECT * on several tables";
+
+        var keys = new List<ScalarExpression>();
+        if (spec.GroupByClause is { } groupBy)
+        {
+            if (ReadGroupBy(groupBy, keys) is { } problem)
+                return problem;
+            _groupBy = Text(groupBy);
+            GroupClause = _groupBy;
+        }
+        else if (IsWindowed)
+        {
+            var window = functions.Windows[0];
+            keys.AddRange(window.Partitions);
+            GroupClause = keys.Count > 0 ? $"PARTITION BY {string.Join(", ", keys.Select(Text))}" : null;
+            MixedPartitions = functions.Windows.Select(w => string.Join(",", w.Partitions.Select(Text).Order(StringComparer.OrdinalIgnoreCase)).ToUpperInvariant()).Distinct().Count() > 1;
+        }
+
+        GroupKeys = keys.Select(Text).ToList();
 
         Sources = sources.Select(s => new ShapeSource(
             Text(s.SchemaObject), s.Alias?.Value, s.Alias?.Value ?? s.SchemaObject.BaseIdentifier.Value)
@@ -162,6 +214,12 @@ public sealed class QueryShape
             Conditions = SplitAnd(where).Select(Text).ToList();
         }
 
+        if (spec.HavingClause?.SearchCondition is { } having)
+        {
+            Having = Text(having);
+            HavingConditions = SplitAnd(having).Select(Text).ToList();
+        }
+
         if (orderBy is not null)
         {
             _orderBy = Text(orderBy);
@@ -170,7 +228,51 @@ public sealed class QueryShape
 
         Distinct = spec.UniqueRowFilter == UniqueRowFilter.Distinct;
         Top = spec.TopRowFilter is { } top ? Text(top) : null;
-        ExtraColumns = FindExtraColumns(spec, orderBy);
+
+        if (IsGrouped || IsWindowed)
+        {
+            RowColumns = FindRowColumns(spec, orderBy, keys, functions);
+            CalculatedColumns = FindCalculatedColumns(spec);
+        }
+        else
+        {
+            ExtraColumns = FindExtraColumns(spec, orderBy);
+        }
+
+        return null;
+    }
+
+    /// <summary>Collects the keys of a GROUP BY; returns what it can't show, if anything.</summary>
+    private string? ReadGroupBy(GroupByClause clause, List<ScalarExpression> keys)
+    {
+        if (clause.All)
+            return "GROUP BY ALL";
+
+        if (clause.GroupByOption is GroupByOption.Rollup)
+            SummaryRows = "WITH ROLLUP";
+        else if (clause.GroupByOption is GroupByOption.Cube)
+            SummaryRows = "WITH CUBE";
+
+        foreach (var item in clause.GroupingSpecifications)
+        {
+            switch (item)
+            {
+                case ExpressionGroupingSpecification plain:
+                    keys.Add(plain.Expression);
+                    break;
+                case RollupGroupingSpecification rollup when rollup.Arguments.All(a => a is ExpressionGroupingSpecification):
+                    SummaryRows = "ROLLUP";
+                    keys.AddRange(rollup.Arguments.Cast<ExpressionGroupingSpecification>().Select(a => a.Expression));
+                    break;
+                case CubeGroupingSpecification cube when cube.Arguments.All(a => a is ExpressionGroupingSpecification):
+                    SummaryRows = "CUBE";
+                    keys.AddRange(cube.Arguments.Cast<ExpressionGroupingSpecification>().Select(a => a.Expression));
+                    break;
+                default:
+                    return "GROUPING SETS";
+            }
+        }
+
         return null;
     }
 
@@ -216,10 +318,14 @@ public sealed class QueryShape
         _ => "JOIN",
     };
 
-    private static IEnumerable<BooleanExpression> SplitAnd(BooleanExpression expression) =>
+    internal static IEnumerable<BooleanExpression> SplitAnd(BooleanExpression expression) =>
         expression is BooleanBinaryExpression { BinaryExpressionType: BooleanBinaryExpressionType.And } and
             ? SplitAnd(and.FirstExpression).Concat(SplitAnd(and.SecondExpression))
             : [expression];
+
+    private static bool SameColumn(ShapeColumn a, ShapeColumn b) =>
+        a.Name.Equals(b.Name, StringComparison.OrdinalIgnoreCase)
+        && (a.Prefix.Length == 0 || b.Prefix.Length == 0 || a.Prefix.Equals(b.Prefix, StringComparison.OrdinalIgnoreCase));
 
     private List<string> FindExtraColumns(QuerySpecification spec, OrderByClause? orderBy)
     {
@@ -235,10 +341,8 @@ public sealed class QueryShape
         void Add(ColumnReferenceExpression column)
         {
             var described = ColumnVisitor.Describe(column);
-            var isShown = shown.Any(s => s.Name.Equals(described.Name, StringComparison.OrdinalIgnoreCase)
-                                         && (s.Prefix.Length == 0 || described.Prefix.Length == 0 || s.Prefix.Equals(described.Prefix, StringComparison.OrdinalIgnoreCase)));
             var text = Text(column);
-            if (!isShown && !extras.Contains(text, StringComparer.OrdinalIgnoreCase))
+            if (!shown.Any(s => SameColumn(s, described)) && !extras.Contains(text, StringComparer.OrdinalIgnoreCase))
                 extras.Add(text);
         }
 
@@ -258,6 +362,74 @@ public sealed class QueryShape
         return extras;
     }
 
+    /// <summary>What a row shows before it's grouped: its group keys, the values the aggregates read and the columns WHERE reads.</summary>
+    private List<ShapeRowColumn> FindRowColumns(QuerySpecification spec, OrderByClause? orderBy, List<ScalarExpression> keys, FunctionVisitor functions)
+    {
+        var columns = new List<ShapeRowColumn>();
+        var named = new List<ShapeColumn>();
+
+        void Add(ScalarExpression expression, string? header = null)
+        {
+            if (expression is ColumnReferenceExpression { MultiPartIdentifier: not null } column)
+            {
+                var described = ColumnVisitor.Describe(column);
+                if (named.Any(n => SameColumn(n, described)))
+                    return;
+                named.Add(described);
+            }
+
+            var text = Text(expression);
+            if (!columns.Any(c => c.Expression.Equals(text, StringComparison.OrdinalIgnoreCase)))
+                columns.Add(new ShapeRowColumn(header ?? text, text));
+        }
+
+        foreach (var key in keys)
+            Add(key);
+        KeyColumns = columns.Count;
+
+        // Window functions keep every row, so the row's other columns belong next to them.
+        if (IsWindowed)
+        {
+            foreach (var element in spec.SelectElements.OfType<SelectScalarExpression>().Where(e => !FunctionVisitor.HasWindow(e.Expression)))
+                Add(element.Expression, element.ColumnName?.Value);
+        }
+
+        // COUNT(*) and COUNT(1) read no column, so there's nothing to show for them.
+        foreach (var argument in functions.Arguments.Where(a => ColumnVisitor.References(a).Count > 0))
+            Add(argument);
+
+        if (spec.WhereClause?.SearchCondition is { } where)
+        {
+            foreach (var column in ColumnVisitor.References(where))
+                Add(column);
+        }
+
+        if (IsWindowed && orderBy is not null)
+        {
+            var aliases = spec.SelectElements.OfType<SelectScalarExpression>().Where(e => e.ColumnName is not null).Select(e => e.ColumnName.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var column in ColumnVisitor.References(orderBy).Where(c => c.MultiPartIdentifier.Count > 1 || !aliases.Contains(c.MultiPartIdentifier.Identifiers[0].Value)))
+                Add(column);
+        }
+
+        // SELECT COUNT(*) FROM Vendors reads no column at all, but the rows it counts should still show up.
+        if (columns.Count == 0)
+            columns.Add(new ShapeRowColumn("Row", $"{Quote(Sources[0].Reference)}.{RowNumberColumn}"));
+
+        return columns;
+    }
+
+    private static List<int> FindCalculatedColumns(QuerySpecification spec)
+    {
+        // * could be any number of columns, so positions after it aren't known.
+        if (spec.SelectElements.Any(e => e is not SelectScalarExpression))
+            return [];
+        return spec.SelectElements.Cast<SelectScalarExpression>()
+            .Select((element, i) => (element, i))
+            .Where(x => x.element.Expression is not ColumnReferenceExpression)
+            .Select(x => x.i)
+            .ToList();
+    }
+
     /// <summary>Selects one table's columns with row numbers in <paramref name="ordering"/>, so a row keeps its number in every query.</summary>
     public string SourceSql(ShapeSource source, string ordering) =>
         $"SELECT {Numbered(source, ordering)} ORDER BY {RowNumberColumn}";
@@ -272,13 +444,55 @@ public sealed class QueryShape
         var columns = new StringBuilder(_selectList);
         for (var i = 0; i < ExtraColumns.Count; i++)
             columns.Append($", {ExtraColumns[i]} AS __hv_x{i}");
-        for (var k = 0; k < Sources.Count; k++)
-            columns.Append($", {Quote(Sources[k].Reference)}.{RowNumberColumn} AS __hv_k{k}");
-        for (var i = 0; i < Conditions.Count; i++)
-            columns.Append($", CASE WHEN ({Conditions[i]}) THEN 1 ELSE 0 END AS __hv_c{i}");
-
+        columns.Append(RowNumberColumns());
+        columns.Append(ConditionColumns());
         return $"SELECT {columns} {NumberedFrom(orderings)} {_orderBy}";
     }
+
+    /// <summary>
+    /// For grouped queries: selects every row of the FROM clause before WHERE, with <see cref="RowColumns"/>, the row number it took from each
+    /// table, 1 or 0 for each of <see cref="Conditions"/>, 1 or 0 for the whole WHERE, and its group's number.
+    /// Group numbers count up in key order among the rows that pass WHERE, which is how <see cref="GroupResultSql"/> numbers them too.
+    /// </summary>
+    public string GroupRowsSql(IReadOnlyList<string> orderings)
+    {
+        var columns = new StringBuilder(string.Join(", ", RowColumns.Select((c, i) => $"{c.Expression} AS __hv_v{i}")));
+        columns.Append(RowNumberColumns());
+        columns.Append(ConditionColumns());
+        columns.Append(Where is null ? ", 1 AS __hv_p" : $", CASE WHEN ({Where}) THEN 1 ELSE 0 END AS __hv_p");
+
+        var order = KeyColumns > 0 ? string.Join(", ", Enumerable.Range(0, KeyColumns).Select(i => $"q.__hv_v{i}")) : "(SELECT NULL)";
+
+        // Numbered in an outer query, as OVER can't contain a subquery from WHERE or a constant key.
+        return $"SELECT q.*, DENSE_RANK() OVER (PARTITION BY q.__hv_p ORDER BY {order}) AS __hv_grp " +
+               $"FROM (SELECT {columns} {NumberedFrom(orderings)}) AS q";
+    }
+
+    /// <summary>
+    /// For GROUP BY: runs the query without HAVING, DISTINCT and TOP, in its ORDER BY order. Each row has the query's own columns, then its
+    /// group's number, then 0 for a group or more for a ROLLUP or CUBE summary row, then 1 or 0 for each of <see cref="HavingConditions"/>.
+    /// </summary>
+    public string GroupResultSql(IReadOnlyList<string> orderings)
+    {
+        var keys = string.Join(", ", GroupKeys);
+        var (number, level) = (GroupKeys.Count > 0, SummaryRows) switch
+        {
+            (false, _) => ("1", "0"),
+            (true, null) => ($"DENSE_RANK() OVER (ORDER BY {keys})", "0"),
+            _ => ($"DENSE_RANK() OVER (PARTITION BY GROUPING_ID({keys}) ORDER BY {keys})", $"GROUPING_ID({keys})"),
+        };
+
+        var columns = new StringBuilder(_selectList);
+        columns.Append($", {number} AS __hv_grp, {level} AS __hv_level");
+        for (var i = 0; i < HavingConditions.Count; i++)
+            columns.Append($", CASE WHEN ({HavingConditions[i]}) THEN 1 ELSE 0 END AS __hv_h{i}");
+
+        return $"SELECT {columns} {NumberedFrom(orderings)} {WhereClause()} {_groupBy} {_orderBy}";
+    }
+
+    /// <summary>For window functions: runs the query without DISTINCT and TOP, in its ORDER BY order, adding the row number each row took from each table.</summary>
+    public string WindowResultSql(IReadOnlyList<string> orderings) =>
+        $"SELECT {_selectList}{RowNumberColumns()} {NumberedFrom(orderings)} {WhereClause()} {_orderBy}";
 
     /// <summary>
     /// Tests the only join's ON condition on every pair of rows, the nested loop a join conceptually runs, so the
@@ -291,6 +505,14 @@ public sealed class QueryShape
                $"CASE WHEN ({Joins[0].On}) THEN 1 ELSE 0 END " +
                $"FROM {NumberedTable(left, orderings[0])} CROSS JOIN {NumberedTable(right, orderings[1])}";
     }
+
+    private string WhereClause() => Where is null ? "" : $"WHERE {Where}";
+
+    private string RowNumberColumns() =>
+        string.Concat(Sources.Select((s, k) => $", {Quote(s.Reference)}.{RowNumberColumn} AS __hv_k{k}"));
+
+    private string ConditionColumns() =>
+        string.Concat(Conditions.Select((c, i) => $", CASE WHEN ({c}) THEN 1 ELSE 0 END AS __hv_c{i}"));
 
     /// <summary>The FROM clause with each table swapped for a copy that has row numbers. Aliases stay, so the query's conditions still work.</summary>
     private string NumberedFrom(IReadOnlyList<string> orderings)
@@ -318,15 +540,28 @@ public sealed class QueryShape
     /// <summary>Finds aggregate and window functions in the query itself, not in its subqueries, which can use them freely.</summary>
     private sealed class FunctionVisitor : TSqlFragmentVisitor
     {
-        public bool Aggregate { get; private set; }
-        public bool Window { get; private set; }
+        public bool HasAggregate { get; private set; }
+        public List<OverClause> Windows { get; } = [];
+
+        /// <summary>What the query's aggregate and window functions read.</summary>
+        public List<ScalarExpression> Arguments { get; } = [];
+
+        public static bool HasWindow(TSqlFragment fragment)
+        {
+            var visitor = new FunctionVisitor();
+            fragment.Accept(visitor);
+            return visitor.Windows.Count > 0;
+        }
 
         public override void Visit(FunctionCall node)
         {
             if (node.OverClause is not null)
-                Window = true;
+                Windows.Add(node.OverClause);
             else if (Aggregates.Contains(node.FunctionName.Value))
-                Aggregate = true;
+                HasAggregate = true;
+            else
+                return;
+            Arguments.AddRange(node.Parameters);
         }
 
         public override void ExplicitVisit(ScalarSubquery node)
@@ -335,7 +570,7 @@ public sealed class QueryShape
     }
 
     /// <summary>Finds the columns an expression reads, leaving out subqueries, whose columns belong to their own tables.</summary>
-    private sealed class ColumnVisitor : TSqlFragmentVisitor
+    internal sealed class ColumnVisitor : TSqlFragmentVisitor
     {
         private readonly List<ColumnReferenceExpression> _columns = [];
 

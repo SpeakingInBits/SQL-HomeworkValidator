@@ -251,6 +251,10 @@ public class VisualizerCanvas : Control
                 context.DrawRectangle(palette.Panel, palette.Border, bounds, Corner, Corner);
                 DrawCells(context, node, bold: true, palette, palette.Accent);
                 break;
+            case VizNodeKind.Group:
+                context.DrawRectangle(state == VizState.Active ? palette.ActiveTint : palette.AccentTint, state == VizState.Active ? palette.ActiveBorder : palette.Border, bounds, Corner, Corner);
+                DrawText(context, node.Text!, new Rect(bounds.X + CellPadding, bounds.Y, bounds.Width - CellPadding * 2, bounds.Height), bold: true, palette.Text);
+                break;
             case VizNodeKind.Card:
                 DrawCard(context, node, bounds, state, palette);
                 break;
@@ -311,7 +315,10 @@ public class VisualizerCanvas : Control
         {
             var width = node.CellWidths![c];
             var text = node.Cells[c];
-            DrawText(context, text, new Rect(x + CellPadding, node.Y, width - CellPadding * 1.5, node.Height), bold, !bold && text == "NULL" ? palette.Muted : brush);
+            var highlighted = node.HighlightedCells.Contains(c);
+            if (highlighted)
+                context.FillRectangle(palette.Highlight, new Rect(x + 1, node.Y + 1, width - 2, node.Height - 2));
+            DrawText(context, text, new Rect(x + CellPadding, node.Y, width - CellPadding * 1.5, node.Height), bold || highlighted, !bold && text == "NULL" ? palette.Muted : brush);
             x += width;
             if (c < node.Cells.Count - 1)
                 context.DrawLine(palette.Border, new Point(x, node.Y + 1), new Point(x, node.Y + node.Height - 1));
@@ -361,6 +368,9 @@ public class VisualizerCanvas : Control
             ActiveTint = Tint(active);
             OuterTint = Tint(outer);
 
+            // Strong enough to stand out on a row that has a tint of its own.
+            Highlight = new SolidColorBrush(((ISolidColorBrush)active).Color, 0.5);
+
             Border = new Pen(Find("DividerBrush"));
             AccentBorder = new Pen(Accent, 2);
             PassBorder = new Pen(Pass, 1.5);
@@ -387,6 +397,7 @@ public class VisualizerCanvas : Control
         public IBrush FailTint { get; }
         public IBrush ActiveTint { get; }
         public IBrush OuterTint { get; }
+        public IBrush Highlight { get; }
         public IPen Border { get; }
         public IPen AccentBorder { get; }
         public IPen PassBorder { get; }

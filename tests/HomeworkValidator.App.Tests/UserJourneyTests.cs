@@ -11,6 +11,7 @@ namespace HomeworkValidator.App.Tests;
 /// A student using the app from start to finish, with only mouse clicks and key presses.
 /// Each step saves a screenshot to bin/.../screenshots/ so a person can see what the student saw.
 /// </summary>
+[Collection(SqlServerCollection.Name)]
 public class UserJourneyTests
 {
     private static readonly ContentLibrary Content = ContentLibrary.Load(ContentLibrary.FindRoot(AppContext.BaseDirectory));
@@ -211,9 +212,9 @@ public class UserJourneyTests
         Assert.Null(app.Visualizer);
 
         // Queries it can't show say why, next to the button.
-        app.WriteAnswer("SELECT CategoryID, COUNT(*) FROM Products GROUP BY CategoryID;");
+        app.WriteAnswer("SELECT ProductName FROM Products UNION SELECT CategoryName FROM Categories;");
         app.Click(app.Button("Visualize"));
-        await app.WaitUntil(() => app.ShowsSelectableTextStartingWith("The visualizer can't show GROUP BY yet."), "the message about GROUP BY");
+        await app.WaitUntil(() => app.ShowsSelectableTextStartingWith("The visualizer can't show UNION"), "the message about UNION");
         Assert.Null(app.Visualizer);
         app.Screenshot("cant-show");
 
@@ -226,9 +227,101 @@ public class UserJourneyTests
         await app.WaitForVisualizerAsync();
         Assert.False(app.ShowsSelectableTextStartingWith("Line 1:"));
 
-        // Scripts don't return rows to watch.
-        app.Click(app.TreeItem("6. Delete category 4"));
+        // Scripts that change the database's design have no rows to watch.
+        app.Click(app.TreeItem("1. Create the Membership database"));
         Assert.False(app.VisibleButton("Visualize"));
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "NeedsSqlServer")]
+    public async Task Student_watches_rows_go_into_groups()
+    {
+        var app = AppDriver.Launch(new MainViewModel(Content, appDataFolder: TestAppBuilder.NewTempFolder()), "visualizer-groups");
+        await ConnectAsync(app);
+
+        app.Click(app.TreeItem("2. Product count and top price"));
+        app.WriteAnswer("SELECT CategoryName, COUNT(*) AS ProductCount, MAX(ListPrice) AS MostExpensive\nFROM Categories c\nJOIN Products p ON c.CategoryID = p.CategoryID\nGROUP BY CategoryName\nHAVING COUNT(*) > 2\nORDER BY ProductCount DESC;");
+        app.Click(app.Button("Visualize"));
+        var visualizer = await app.WaitForVisualizerAsync();
+        Assert.True(app.VisualizerShows("Categories ⋈ Products → GROUP BY → HAVING → ORDER BY"));
+
+        var animation = (VisualizerViewModel)visualizer.DataContext!;
+        var frames = animation.Scene.Frames.ToList();
+        void GoTo(string phaseStart, string screenshot)
+        {
+            animation.Step = frames.FindIndex(f => f.Phase.StartsWith(phaseStart, StringComparison.Ordinal));
+            Assert.True(animation.Step >= 0, phaseStart);
+            Dispatcher.UIThread.RunJobs();
+            app.VisualizerScreenshot(visualizer, screenshot);
+        }
+
+        GoTo("Row 5 of 10 goes into the group", "into-groups");
+        GoTo("Guitars: 6 rows become one row: ProductCount = 6, MostExpensive = 2517", "summarize");
+        GoTo("HAVING: test row 2", "having");
+        GoTo("Sorted", "sorted");
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "NeedsSqlServer")]
+    public async Task Student_watches_rows_change()
+    {
+        var app = AppDriver.Launch(new MainViewModel(Content, appDataFolder: TestAppBuilder.NewTempFolder()), "visualizer-changes");
+        await ConnectAsync(app);
+
+        // An UPDATE, on the table an earlier question's solution set up. Only the visualizer's copy changes, and only until it finishes.
+        app.Click(app.TreeItem("4. Change default account 400"));
+        app.WriteAnswer("UPDATE VendorCopy\nSET DefaultAccountNo = 403\nWHERE DefaultAccountNo = 400;");
+        app.Click(app.Button("Visualize"));
+        var visualizer = await app.WaitForVisualizerAsync();
+        Assert.True(app.VisualizerShows("UPDATE VendorCopy"));
+
+        var animation = (VisualizerViewModel)visualizer.DataContext!;
+        var updated = animation.Scene.Frames.ToList().FindIndex(f => f.Phase.StartsWith("✓ Updated: DefaultAccountNo 400 → 403", StringComparison.Ordinal));
+        Assert.True(updated > 0);
+        animation.Step = updated;
+        Dispatcher.UIThread.RunJobs();
+        app.VisualizerScreenshot(visualizer, "update");
+        animation.Step = animation.Scene.Frames.Count - 1;
+        Dispatcher.UIThread.RunJobs();
+        Assert.StartsWith("UPDATE complete:", animation.Phase);
+        app.VisualizerScreenshot(visualizer, "update-done");
+
+        // A script with two statements gets a choice of statement.
+        app.Click(app.TreeItem("6. Delete category 4"));
+        app.WriteAnswer("DELETE Products\nWHERE CategoryID = 4;\n\nDELETE Categories\nWHERE CategoryID = 4;");
+        app.Click(app.Button("Visualize"));
+        await app.WaitUntil(() => app.VisualizerShows("DELETE Products"), "the first DELETE's animation");
+        var deletes = (VisualizerViewModel)visualizer.DataContext!;
+        Assert.Equal(2, deletes.Scenes.Count);
+        deletes.Step = deletes.Scene.Frames.Count - 1;
+        Dispatcher.UIThread.RunJobs();
+        app.VisualizerScreenshot(visualizer, "delete");
+
+        deletes.Scene = deletes.Scenes[1];
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(app.VisualizerShows("DELETE Categories"));
+        Assert.Equal(0, deletes.Step);
+
+        // An INSERT shows the values SQL Server fills in.
+        app.Click(app.TreeItem("1. Add the Brass category"));
+        app.WriteAnswer("INSERT INTO Categories (CategoryName)\nVALUES ('Brass');");
+        app.Click(app.Button("Visualize"));
+        await app.WaitUntil(() => app.VisualizerShows("INSERT Categories"), "the INSERT's animation");
+        var insert = (VisualizerViewModel)visualizer.DataContext!;
+        Assert.Equal("Add row 1 of 1. SQL Server fills in CategoryID", insert.Scene.Frames[1].Phase);
+        insert.Step = 1;
+        Dispatcher.UIThread.RunJobs();
+        app.VisualizerScreenshot(visualizer, "insert");
+
+        // A mistake is reported the way a check reports it.
+        app.WriteAnswer("DELETE Categories WHERE CategoryID = 1;");
+        app.Click(app.Button("Visualize"));
+        await app.WaitUntil(() => app.ShowsSelectableTextStartingWith("Line 1:"), "the foreign key error");
+
+        // Scripts with nothing to show say so.
+        app.WriteAnswer("SELECT * INTO CategoryCopy FROM Categories;");
+        app.Click(app.Button("Visualize"));
+        await app.WaitUntil(() => app.ShowsSelectableTextStartingWith("The visualizer shows INSERT, UPDATE and DELETE"), "the message about SELECT INTO");
     }
 
     [AvaloniaFact]

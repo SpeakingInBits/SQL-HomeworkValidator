@@ -1,3 +1,5 @@
+using static HomeworkValidator.Core.Visualization.SceneLayout;
+
 namespace HomeworkValidator.Core.Visualization;
 
 /// <summary>
@@ -6,23 +8,36 @@ namespace HomeworkValidator.Core.Visualization;
 /// </summary>
 public sealed class SceneBuilder
 {
-    private const double RowHeight = 28, HeaderHeight = 30, TitleHeight = 26, RowGap = 6, TableGap = 140, Pad = 48, CardHeight = 44, CardGap = 12;
-    private const double CharWidth = 7.3, CellPadding = 18, MinCellWidth = 48, MaxCellWidth = 200, MinTableWidth = 120;
+    private const double GroupHeight = 26;
 
     private readonly QueryTrace _trace;
     private readonly List<VizNode> _nodes = [];
     private readonly List<VizEdge> _edges = [];
 
     private readonly List<List<string>> _sourceIds = [];
-    private readonly List<string> _cardIds = [];
+    private List<string> _cardIds = [];
 
     /// <summary>The joined rows, or the rows of the only table: one node per row of the trace.</summary>
     private List<string> _rowIds = [];
 
-    /// <summary>Rows that passed WHERE, and each trace row's position among them.</summary>
-    private List<string> _matchedIds = [];
-    private readonly Dictionary<int, int> _matchedSlot = [];
-    private readonly Dictionary<int, int> _matchedEdge = [];
+    /// <summary>Rows that passed WHERE.</summary>
+    private readonly Passed _matched = new();
+
+    /// <summary>Per row of the trace that reached the groups: its node in its group, and the connector there.</summary>
+    private readonly Dictionary<int, string> _bucketIds = [];
+    private readonly Dictionary<int, int> _bucketEdges = [];
+
+    /// <summary>Per group: its heading and its rows.</summary>
+    private readonly List<string> _groupIds = [];
+    private readonly List<List<int>> _groupRows = [];
+
+    /// <summary>What the groups produce, and per one of those rows the connectors from what produced it.</summary>
+    private List<string> _summaryIds = [];
+    private readonly List<List<int>> _summaryEdges = [];
+
+    /// <summary>Summary rows that passed HAVING.</summary>
+    private List<string> _havingCardIds = [];
+    private readonly Passed _having = new();
 
     /// <summary>Rows in ORDER BY order.</summary>
     private List<string> _sortedIds = [];
@@ -58,49 +73,51 @@ public sealed class SceneBuilder
 
     private void Layout()
     {
-        var hasCards = _trace.Filter is not null;
-        var y = Pad + (hasCards ? CardHeight + 28 : 0);
+        var hasCards = _trace.Filter is not null || _trace.Grouping?.Having is not null;
+        var y = Pad + (hasCards ? CardArea : 0);
         var x = Pad;
 
         for (var k = 0; k < SourceCount; k++)
         {
             var source = _trace.Sources[k];
-            var (ids, width) = AddTable($"t{k}", source.Label, source.Columns, source.Rows, x, y);
+            var (ids, width) = AddTable(_nodes, $"t{k}", source.Label, source.Columns, source.Rows, x, y);
             _sourceIds.Add(ids);
             x += width + TableGap;
         }
 
         var filter = _trace.Filter;
         var sort = _trace.Sort;
+        var grouping = _trace.Grouping;
         var everyColumn = _trace.Columns.Count;
 
         var inputTitle = HasJoin ? (filter is null ? "Joined rows" : "Joined rows (before WHERE)") : _trace.Title;
-        var inputIsLast = filter is null && sort is null;
-        var (rowIds, inputWidth) = AddTable("rows", inputTitle, Columns(inputIsLast ? _trace.ResultColumns : everyColumn),
+        var inputIsLast = filter is null && sort is null && grouping is null;
+        var (rowIds, inputWidth) = AddTable(_nodes, "rows", inputTitle, Columns(inputIsLast ? _trace.ResultColumns : everyColumn),
             Rows(Enumerable.Range(0, RowCount), inputIsLast ? _trace.ResultColumns : everyColumn), x, y);
         _rowIds = rowIds;
-        AddCards(x);
+        if (filter is not null)
+            _cardIds = AddCards(_nodes, "card", filter.Conditions, x);
         x += inputWidth + TableGap;
 
         if (filter is not null)
         {
             var passing = Enumerable.Range(0, RowCount).Where(i => filter.Passes[i]).ToList();
-            var columns = sort is null ? _trace.ResultColumns : everyColumn;
-            var (ids, width) = AddTable("matched", sort is null ? "Result (WHERE)" : "Matched (WHERE)", Columns(columns), Rows(passing, columns), x, y);
-            _matchedIds = ids;
-            for (var slot = 0; slot < passing.Count; slot++)
-            {
-                _matchedSlot[passing[slot]] = slot;
-                _matchedEdge[passing[slot]] = _edges.Count;
-                _edges.Add(new VizEdge(_rowIds[passing[slot]], ids[slot]));
-            }
-
+            var isLast = sort is null && grouping is null;
+            var columns = isLast ? _trace.ResultColumns : everyColumn;
+            var (ids, width) = AddTable(_nodes, "matched", isLast ? "Result (WHERE)" : "Matched (WHERE)", Columns(columns), Rows(passing, columns), x, y);
+            Connect(_matched, ids, passing, i => _rowIds[i]);
             x += width + TableGap;
         }
 
+        if (grouping is not null)
+            x = LayoutGroups(grouping, x, y);
+
         if (sort is not null)
         {
-            var (ids, _) = AddTable("sorted", $"Sorted by {string.Join(", ", sort.Keys)}", Columns(_trace.ResultColumns), Rows(sort.Order, _trace.ResultColumns), x, y);
+            var (columns, rows) = grouping is not null
+                ? (grouping.Columns, sort.Order.Select(i => grouping.Rows[i]).ToList())
+                : (Columns(_trace.ResultColumns), Rows(sort.Order, _trace.ResultColumns));
+            var (ids, _) = AddTable(_nodes, "sorted", $"Sorted by {string.Join(", ", sort.Keys)}", columns, rows, x, y);
             _sortedIds = ids;
             for (var i = 0; i < sort.Order.Count; i++)
             {
@@ -113,52 +130,109 @@ public sealed class SceneBuilder
             AddJoinEdges();
     }
 
+    /// <summary>Records the table of rows that passed a test, and connects each to the node it came from.</summary>
+    private void Connect(Passed passed, List<string> ids, List<int> rows, Func<int, string> from)
+    {
+        passed.Ids = ids;
+        for (var slot = 0; slot < rows.Count; slot++)
+        {
+            passed.Slots[rows[slot]] = slot;
+            passed.Edges[rows[slot]] = _edges.Count;
+            _edges.Add(new VizEdge(from(rows[slot]), ids[slot]));
+        }
+    }
+
+    private double LayoutGroups(TraceGrouping grouping, double x, double y)
+    {
+        var noun = grouping.Collapses ? "Groups" : "Partitions";
+        var inGroups = Enumerable.Range(0, RowCount).Where(i => grouping.GroupOfRow[i] >= 0).ToList();
+
+        var title = grouping.Clause is { } clause ? $"{noun} ({clause})" : noun;
+        var widths = CellWidths(_trace.Columns, inGroups.Select(i => _trace.Rows[i]));
+        var (width, heading) = AddHeading(_nodes, "groups", title, _trace.Columns, widths, x, y);
+
+        var rowY = y + heading;
+        for (var group = 0; group < grouping.Labels.Count; group++)
+        {
+            var members = inGroups.Where(i => grouping.GroupOfRow[i] == group).ToList();
+            _groupRows.Add(members);
+            var label = grouping.Labels[group];
+            _groupIds.Add($"group-{group}");
+            _nodes.Add(new VizNode(_groupIds[group], VizNodeKind.Group, x, rowY, width, GroupHeight, Text: $"{label} ({Rows(members.Count)})"));
+            rowY += GroupHeight + RowGap;
+
+            foreach (var row in members)
+            {
+                var id = $"group-row-{row}";
+                _bucketIds[row] = id;
+                _nodes.Add(new VizNode(id, VizNodeKind.Row, x, rowY, width, RowHeight, Cells: _trace.Rows[row], CellWidths: widths));
+                _bucketEdges[row] = _edges.Count;
+                _edges.Add(new VizEdge(RowNode(row), id));
+                rowY += RowHeight + RowGap;
+            }
+
+            rowY += RowGap * 2;
+        }
+
+        x += width + TableGap;
+
+        // HAVING and ORDER BY carry on from the rows the groups produce.
+        var title2 = grouping.Collapses ? "One row per group" : "Result";
+        var (summaryIds, summaryWidth) = AddTable(_nodes, "summary", title2, grouping.Columns, grouping.Rows, x, y);
+        _summaryIds = summaryIds;
+        for (var i = 0; i < grouping.Rows.Count; i++)
+        {
+            var source = grouping.Sources[i];
+            var edges = new List<int>();
+            if (source >= 0)
+            {
+                edges.Add(_edges.Count);
+                _edges.Add(new VizEdge(grouping.Collapses ? _groupIds[source] : _bucketIds[source], summaryIds[i]));
+            }
+
+            _summaryEdges.Add(edges);
+        }
+
+        if (grouping.Having is { } having)
+        {
+            _havingCardIds = AddCards(_nodes, "having-card", having.Conditions, x);
+            x += summaryWidth + TableGap;
+            var passing = Enumerable.Range(0, grouping.Rows.Count).Where(i => having.Passes[i]).ToList();
+            var (ids, width3) = AddTable(_nodes, "having", _trace.Sort is null ? "Result (HAVING)" : "Matched (HAVING)", grouping.Columns,
+                passing.Select(i => grouping.Rows[i]).ToList(), x, y);
+            Connect(_having, ids, passing, i => _summaryIds[i]);
+            return x + width3 + TableGap;
+        }
+
+        return x + summaryWidth + TableGap;
+    }
+
+    private static string Rows(int count) => count == 1 ? "1 row" : $"{count} rows";
+
     private IReadOnlyList<string> Columns(int count) => _trace.Columns.Take(count).ToList();
 
     private List<IReadOnlyList<string>> Rows(IEnumerable<int> rows, int columns) =>
         rows.Select(i => (IReadOnlyList<string>)_trace.Rows[i].Take(columns).ToList()).ToList();
 
+    /// <summary>A row's node in the last table before grouping.</summary>
+    private string RowNode(int row) => _trace.Filter is null ? _rowIds[row] : _matched.Ids[_matched.Slots[row]];
+
     /// <summary>The node a row is sorted from: the table just before the sorted one.</summary>
-    private string SortSource(int row) => _trace.Filter is null ? _rowIds[row] : _matchedIds[_matchedSlot[row]];
-
-    private (List<string> Ids, double Width) AddTable(
-        string prefix, string title, IReadOnlyList<string> columns, IReadOnlyList<IReadOnlyList<string>> rows, double x, double y)
+    private string SortSource(int row)
     {
-        var widths = columns.Select((column, c) => CellWidth(rows.Select(r => r[c].Length).Append(column.Length).Max())).ToList();
-        var width = Math.Max(widths.Sum(), MinTableWidth);
-
-        // A narrow table's title can run on over the gap after it.
-        _nodes.Add(new VizNode($"{prefix}-title", VizNodeKind.Title, x, y, Math.Max(width, title.Length * CharWidth + CellPadding), TitleHeight, Text: title));
-        _nodes.Add(new VizNode($"{prefix}-header", VizNodeKind.Header, x, y + TitleHeight, width, HeaderHeight, Cells: columns, CellWidths: widths));
-
-        var ids = new List<string>();
-        var rowY = y + TitleHeight + HeaderHeight;
-        for (var i = 0; i < rows.Count; i++)
-        {
-            var id = $"{prefix}-row-{i}";
-            ids.Add(id);
-            _nodes.Add(new VizNode(id, VizNodeKind.Row, x, rowY, width, RowHeight, Cells: rows[i], CellWidths: widths));
-            rowY += RowHeight + RowGap;
-        }
-
-        return (ids, width);
+        if (_trace.Grouping is not { } grouping)
+            return RowNode(row);
+        return grouping.Having is null ? _summaryIds[row] : _having.Ids[_having.Slots[row]];
     }
 
-    private static double CellWidth(int characters) => Math.Clamp(characters * CharWidth + CellPadding, MinCellWidth, MaxCellWidth);
-
-    /// <summary>One card per WHERE condition, across the top of the table it tests.</summary>
-    private void AddCards(double x)
+    /// <summary>The table the query's result ends up in.</summary>
+    private List<string> LastTable()
     {
-        if (_trace.Filter is not { } filter)
-            return;
-        for (var c = 0; c < filter.Conditions.Count; c++)
-        {
-            var width = Math.Max(filter.Conditions[c].Length * CharWidth + 44, 150);
-            var id = $"card-{c}";
-            _cardIds.Add(id);
-            _nodes.Add(new VizNode(id, VizNodeKind.Card, x, Pad, width, CardHeight, Text: filter.Conditions[c]));
-            x += width + CardGap;
-        }
+        if (_trace.Sort is not null)
+            return _sortedIds;
+        if (_trace.Grouping is { } grouping)
+            return grouping.Having is null ? _summaryIds : _having.Ids;
+        return _trace.Filter is not null ? _matched.Ids : _rowIds;
     }
 
     private void AddJoinEdges()
@@ -202,6 +276,13 @@ public sealed class SceneBuilder
         var parts = new List<string> { FromTitle() };
         if (_trace.Filter is not null)
             parts.Add("WHERE");
+        if (_trace.Grouping is { } grouping)
+        {
+            parts.Add(grouping.Collapses ? (grouping.Clause is null ? "Aggregate" : "GROUP BY") : "OVER");
+            if (grouping.Having is not null)
+                parts.Add("HAVING");
+        }
+
         if (_trace.Sort is not null)
             parts.Add("ORDER BY");
         return string.Join(" → ", parts);
@@ -233,9 +314,21 @@ public sealed class SceneBuilder
         var parts = _trace.Joins.Where(j => j.On is not null).Select(j => $"ON {j.On}").ToList();
         if (_trace.Filter is { } filter)
             parts.Add($"WHERE {filter.Text}");
+        if (_trace.Grouping?.Clause is { } clause)
+            parts.Add(clause);
+        if (_trace.Grouping?.Having is { } having)
+            parts.Add($"HAVING {having.Text}");
         if (_trace.Sort is { } sort)
             parts.Add($"ORDER BY {string.Join(", ", sort.Keys)}");
         return parts.Count > 0 ? string.Join("  ·  ", parts) : "A full table scan";
+    }
+
+    /// <summary>A table of rows that passed a test: its nodes, and per row tested, its position there and the connector to it.</summary>
+    private sealed class Passed
+    {
+        public List<string> Ids { get; set; } = [];
+        public Dictionary<int, int> Slots { get; } = [];
+        public Dictionary<int, int> Edges { get; } = [];
     }
 
     // ----- Frames -----
@@ -253,18 +346,24 @@ public sealed class SceneBuilder
 
         public List<VizFrame> Write()
         {
-            _hidden.UnionWith(scene._matchedIds);
+            _hidden.UnionWith(scene._matched.Ids);
+            _hidden.UnionWith(scene._groupIds);
+            _hidden.UnionWith(scene._bucketIds.Values);
+            _hidden.UnionWith(scene._summaryIds);
+            _hidden.UnionWith(scene._having.Ids);
             _hidden.UnionWith(scene._sortedIds);
 
             if (scene.HasJoin)
                 WriteJoin();
-            else if (_trace.Filter is null && _trace.Sort is null)
+            else if (_trace.Filter is null && _trace.Sort is null && _trace.Grouping is null)
                 WriteScan();
             else if (_trace.Filter is null)
                 Emit([], [], $"Rows of {_trace.Title}, in the order they're stored");
 
             if (_trace.Filter is { } filter)
-                WriteFilter(filter);
+                WriteWhere(filter);
+            if (_trace.Grouping is { } grouping)
+                WriteGroups(grouping);
             if (_trace.Sort is { } sort)
                 WriteSort(sort);
             WriteCuts();
@@ -412,48 +511,134 @@ public sealed class SceneBuilder
             Emit(now, scene._comparisonEdges[left], phase);
         }
 
-        // ----- WHERE -----
+        // ----- WHERE and HAVING -----
 
-        private void WriteFilter(TraceFilter filter)
+        private void WriteWhere(TraceFilter filter)
         {
-            var ids = scene._rowIds;
-            var count = ids.Count;
-
             if (!scene.HasJoin)
             {
-                foreach (var id in ids)
+                foreach (var id in scene._rowIds)
                     _settled[id] = VizState.Pending;
                 Emit([], [], "Start scan");
             }
 
+            WriteTest("WHERE", filter, scene._rowIds, scene._cardIds, scene._matched,
+                i => scene.HasJoin && IsOuter(_trace.Paths[i]) ? VizState.Outer : VizState.Matched);
+        }
+
+        /// <summary>Tests each row against a clause's conditions, moving the ones that pass to the next table.</summary>
+        private void WriteTest(string clause, TraceFilter filter, List<string> ids, List<string> cardIds, Passed passed, Func<int, VizState> passState)
+        {
+            var count = ids.Count;
             for (var i = 0; i < count; i++)
             {
                 var testing = State(ids[i], VizState.Scanning);
-                Emit([testing], [], $"WHERE: test row {i + 1} of {count}");
+                Emit([testing], [], $"{clause}: test row {i + 1} of {count}");
 
                 var cards = new List<KeyValuePair<string, VizState>> { testing };
                 for (var c = 0; c < filter.Conditions.Count; c++)
                 {
-                    cards.Add(State(scene._cardIds[c], filter.ConditionResults[c][i] ? VizState.True : VizState.False));
+                    cards.Add(State(cardIds[c], filter.ConditionResults[c][i] ? VizState.True : VizState.False));
                     Emit(cards, [], $"Check: {filter.Conditions[c]}");
                 }
 
                 if (filter.Passes[i])
                 {
-                    var matched = scene._matchedIds[scene._matchedSlot[i]];
-                    _hidden.Remove(matched);
-                    _settled[ids[i]] = scene.HasJoin && IsOuter(_trace.Paths[i]) ? VizState.Outer : VizState.Matched;
-                    Emit([State(matched, VizState.New)], [scene._matchedEdge[i]], "✓ Kept by WHERE");
-                    _settled[matched] = VizState.Matched;
+                    var kept = passed.Ids[passed.Slots[i]];
+                    _hidden.Remove(kept);
+                    _settled[ids[i]] = passState(i);
+                    Emit([State(kept, VizState.New)], [passed.Edges[i]], $"✓ Kept by {clause}");
+                    _settled[kept] = VizState.Matched;
                 }
                 else
                 {
                     _settled[ids[i]] = VizState.Rejected;
-                    Emit([], [], "✗ Filtered out by WHERE");
+                    Emit([], [], $"✗ Filtered out by {clause}");
                 }
             }
 
-            Emit([], [], $"Filter complete: {scene._matchedIds.Count} of {count} row(s) kept");
+            Emit([], [], clause == "WHERE"
+                ? $"Filter complete: {passed.Ids.Count} of {count} row(s) kept"
+                : $"{clause} complete: {passed.Ids.Count} of {count} row(s) kept");
+        }
+
+        // ----- GROUP BY and window functions -----
+
+        private void WriteGroups(TraceGrouping grouping)
+        {
+            var noun = grouping.Collapses ? "group" : "partition";
+            var members = scene._bucketIds.Keys.Order().ToList();
+
+            for (var i = 0; i < members.Count; i++)
+            {
+                var row = members[i];
+                var group = grouping.GroupOfRow[row];
+                var (from, to) = (scene.RowNode(row), scene._bucketIds[row]);
+                _hidden.Remove(scene._groupIds[group]);
+                _hidden.Remove(to);
+                Emit([State(from, VizState.Active), State(to, VizState.New)], [scene._bucketEdges[row]],
+                    $"Row {i + 1} of {members.Count} goes into the {noun} for {grouping.Labels[group]}");
+                _settled[from] = VizState.Placed;
+            }
+
+            // An aggregate over no rows at all still gives a row, so its group has to appear too.
+            foreach (var id in scene._groupIds)
+                _hidden.Remove(id);
+            Emit([], [], $"{Count(scene._groupIds.Count, noun)} of rows");
+
+            for (var group = 0; group < scene._groupIds.Count; group++)
+            {
+                var rows = scene._groupRows[group];
+                var results = Enumerable.Range(0, grouping.Rows.Count)
+                    .Where(i => grouping.Collapses ? grouping.Sources[i] == group : rows.Contains(grouping.Sources[i]))
+                    .ToList();
+                if (results.Count == 0)
+                    continue;
+
+                var now = rows.Select(r => State(scene._bucketIds[r], VizState.Active)).Append(State(scene._groupIds[group], VizState.Active));
+                foreach (var result in results)
+                    _hidden.Remove(scene._summaryIds[result]);
+                Emit(now.Concat(results.Select(r => State(scene._summaryIds[r], VizState.New))),
+                    results.SelectMany(r => scene._summaryEdges[r]).ToList(),
+                    SummaryPhase(grouping, group, rows.Count, results[0]));
+
+                foreach (var row in rows)
+                    _settled[scene._bucketIds[row]] = VizState.Matched;
+                _settled[scene._groupIds[group]] = VizState.Matched;
+                foreach (var result in results)
+                    _settled[scene._summaryIds[result]] = VizState.Matched;
+            }
+
+            // ROLLUP and CUBE add rows that total several groups.
+            for (var i = 0; i < grouping.Rows.Count; i++)
+            {
+                if (grouping.Collapses && grouping.Sources[i] < 0)
+                {
+                    _hidden.Remove(scene._summaryIds[i]);
+                    Emit([State(scene._summaryIds[i], VizState.New)], [], $"{grouping.SummaryRows} adds a row that totals several groups: {Calculated(grouping, i)}");
+                    _settled[scene._summaryIds[i]] = VizState.Matched;
+                }
+            }
+
+            if (grouping.Having is { } having)
+                WriteTest("HAVING", having, scene._summaryIds, scene._havingCardIds, scene._having, _ => VizState.Matched);
+        }
+
+        private static string Count(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
+
+        private static string SummaryPhase(TraceGrouping grouping, int group, int rows, int result)
+        {
+            var label = grouping.Labels[group];
+            return grouping.Collapses
+                ? $"{label}: {Count(rows, "row")} become one row: {Calculated(grouping, result)}"
+                : $"{label}: the window functions run over {Count(rows, "row")}, and each row keeps its place";
+        }
+
+        /// <summary>What was worked out for a row, such as "PaymentSum = 1200".</summary>
+        private static string Calculated(TraceGrouping grouping, int row)
+        {
+            var columns = grouping.Calculated.Count > 0 ? grouping.Calculated : Enumerable.Range(0, grouping.Columns.Count).ToList();
+            return string.Join(", ", columns.Select(c => $"{grouping.Columns[c]} = {grouping.Rows[row][c]}"));
         }
 
         // ----- ORDER BY -----
@@ -477,10 +662,7 @@ public sealed class SceneBuilder
 
         private void WriteCuts()
         {
-            var last = _trace.Sort is not null ? scene._sortedIds
-                : _trace.Filter is not null ? scene._matchedIds
-                : scene._rowIds;
-
+            var last = scene.LastTable();
             foreach (var cut in _trace.Cuts)
             {
                 for (var i = 0; i < last.Count; i++)

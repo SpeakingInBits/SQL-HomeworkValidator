@@ -19,6 +19,10 @@ public sealed record ScriptRun(DatabaseSnapshot Snapshot, bool EndedTransaction)
     public IReadOnlyList<ProbeResult> Probes { get; init; } = [];
 }
 
+/// <summary>What <see cref="ScriptRunner.ReadResultsAsync"/> read from a script.</summary>
+/// <param name="EndedTransaction">The script's own COMMIT or ROLLBACK ended the validator's transaction, so the database has to be rebuilt.</param>
+public sealed record ScriptResults(IReadOnlyList<ResultTable> Results, bool EndedTransaction);
+
 /// <param name="Error">SQL Server's message when the probe failed; null when it succeeded.</param>
 /// <param name="Result">The probe's last result set, if it returned one.</param>
 public sealed record ProbeResult(string Name, string? Error, ResultTable? Result)
@@ -60,22 +64,7 @@ public sealed class ScriptRunner(ServerConnection server)
 
         try
         {
-            await ResetIdentitiesAsync(connection, ct);
-
-            foreach (var batch in setup)
-            {
-                try
-                {
-                    await ExecuteAsync(connection, batch, ct);
-                }
-                catch (SqlException ex)
-                {
-                    throw new InvalidOperationException($"The question's setup failed: {ex.Message}");
-                }
-            }
-
-            if (restricted)
-                await ExecuteAsync(connection, $"EXECUTE AS USER = '{DatabaseManager.WriterUser}' WITH NO REVERT;", ct);
+            await PrepareAsync(connection, setup, restricted, ct);
 
             foreach (var batch in script)
             {
@@ -106,6 +95,71 @@ public sealed class ScriptRunner(ServerConnection server)
             if (connection.State == System.Data.ConnectionState.Open)
                 await ExecuteAsync(connection, "IF @@TRANCOUNT > 0 ROLLBACK;", CancellationToken.None);
         }
+    }
+
+    /// <summary>
+    /// Runs a student's script like <see cref="RunAsync"/> does, keeping nothing, and returns the result sets it produced
+    /// whose first column starts with <paramref name="resultPrefix"/>. Any others, such as the student's own SELECTs, are skipped.
+    /// </summary>
+    public async Task<ScriptResults> ReadResultsAsync(string database, IReadOnlyList<string> setup, IReadOnlyList<string> script, string resultPrefix, CancellationToken ct = default)
+    {
+        // Unpooled, because the impersonation below can't be undone and must not leak to other work.
+        await using var connection = await server.OpenAsync(database, pooling: false, ct);
+        await ExecuteAsync(connection, "SET XACT_ABORT OFF; BEGIN TRANSACTION;", ct);
+
+        try
+        {
+            await PrepareAsync(connection, setup, restricted: true, ct);
+
+            var results = new List<ResultTable>();
+            foreach (var batch in script)
+            {
+                try
+                {
+                    await using var command = new SqlCommand(batch, connection) { CommandTimeout = TimeoutSeconds };
+                    await using var reader = await command.ExecuteReaderAsync(ct);
+                    do
+                    {
+                        if (reader.FieldCount > 0 && reader.GetName(0).StartsWith(resultPrefix, StringComparison.Ordinal))
+                            results.Add(await QueryRunner.ReadAsync(reader, command, MaxRowsPerTable, $"A table has more than {MaxRowsPerTable:N0} rows, too many to show.", ct));
+                    }
+                    while (await reader.NextResultAsync(ct));
+                }
+                catch (SqlException ex)
+                {
+                    throw QueryRunner.Describe(ex, TimeoutSeconds, "script");
+                }
+            }
+
+            return new ScriptResults(results, await ScalarAsync<int>(connection, "SELECT @@TRANCOUNT", ct) == 0);
+        }
+        finally
+        {
+            // Whatever happened, throw the changes away. If the script already ended the transaction there's nothing to roll back.
+            if (connection.State == System.Data.ConnectionState.Open)
+                await ExecuteAsync(connection, "IF @@TRANCOUNT > 0 ROLLBACK;", CancellationToken.None);
+        }
+    }
+
+    /// <summary>Gets a new transaction ready for a script: same identity values every time, the question's setup, then the student's permissions.</summary>
+    private async Task PrepareAsync(SqlConnection connection, IReadOnlyList<string> setup, bool restricted, CancellationToken ct)
+    {
+        await ResetIdentitiesAsync(connection, ct);
+
+        foreach (var batch in setup)
+        {
+            try
+            {
+                await ExecuteAsync(connection, batch, ct);
+            }
+            catch (SqlException ex)
+            {
+                throw new InvalidOperationException($"The question's setup failed: {ex.Message}");
+            }
+        }
+
+        if (restricted)
+            await ExecuteAsync(connection, $"EXECUTE AS USER = '{DatabaseManager.WriterUser}' WITH NO REVERT;", ct);
     }
 
     /// <summary>

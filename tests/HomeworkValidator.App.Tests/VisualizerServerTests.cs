@@ -10,6 +10,7 @@ namespace HomeworkValidator.App.Tests;
 /// Runs only when HV_TEST_CONNECTION_STRING is set, and needs the validator's databases.
 /// </summary>
 [Trait("Category", "NeedsSqlServer")]
+[Collection(SqlServerCollection.Name)]
 public class VisualizerServerTests
 {
     private const string AP = "HV_AP_base";
@@ -36,7 +37,7 @@ public class VisualizerServerTests
         var result = trace.Result;
         return result
             .Where((_, i) => trace.Cuts.Count == 0 || trace.Cuts[^1].Keeps[i])
-            .Select(r => string.Join('|', trace.Rows[r].Take(trace.ResultColumns)))
+            .Select(r => string.Join('|', trace.ResultCells(r)))
             .ToList();
     }
 
