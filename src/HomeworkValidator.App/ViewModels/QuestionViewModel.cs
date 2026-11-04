@@ -151,8 +151,8 @@ public partial class QuestionViewModel : ViewModelBase
         LinkedFileChanged = false;
     }
 
-    /// <summary>Only queries have rows to watch; scripts that change the database don't.</summary>
-    public bool CanVisualize => !Question.IsScript;
+    /// <summary>Queries and scripts that change data have rows to watch; scripts that change the database's design don't.</summary>
+    public bool CanVisualize => Question.Kind != QuestionKind.Ddl;
 
     /// <summary>Why the visualizer couldn't show the answer: a mistake in it, or a feature it doesn't show.</summary>
     [ObservableProperty]

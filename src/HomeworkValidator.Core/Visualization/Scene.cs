@@ -13,7 +13,10 @@ public enum VizNodeKind
 
     Row,
 
-    /// <summary>A WHERE condition.</summary>
+    /// <summary>The heading of a group of rows.</summary>
+    Group,
+
+    /// <summary>A WHERE or HAVING condition.</summary>
     Card,
 }
 
@@ -95,7 +98,11 @@ public sealed record VizNode(
     double Height,
     string? Text = null,
     IReadOnlyList<string>? Cells = null,
-    IReadOnlyList<double>? CellWidths = null);
+    IReadOnlyList<double>? CellWidths = null)
+{
+    /// <summary>Cells to draw attention to, such as the ones an UPDATE changed.</summary>
+    public IReadOnlyList<int> HighlightedCells { get; init; } = [];
+}
 
 /// <summary>A connector between two nodes. It's drawn only in frames that list it.</summary>
 public sealed record VizEdge(string From, string To, VizEdgeKind Kind = VizEdgeKind.Path);

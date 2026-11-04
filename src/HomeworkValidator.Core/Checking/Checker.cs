@@ -198,7 +198,7 @@ public sealed class Checker(ContentLibrary content, DatabaseManager databases, S
     /// The batches that set up a DML or DDL question's starting state: the reference solutions of the questions it runs after
     /// (and of the ones those run after), then its own setup script.
     /// </summary>
-    private IReadOnlyList<string> SetupBatches(Question question)
+    public IReadOnlyList<string> SetupBatches(Question question)
     {
         var batches = new List<string>();
         var done = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

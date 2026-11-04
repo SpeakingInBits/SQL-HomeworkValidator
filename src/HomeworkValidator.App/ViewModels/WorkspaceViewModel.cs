@@ -25,6 +25,7 @@ public partial class WorkspaceViewModel : ViewModelBase
     private readonly DatabaseManager _databases;
     private readonly Checker _checker;
     private readonly QueryTracer _tracer;
+    private readonly ChangeTracer _changes;
     private readonly AnswerStore _answers;
     private readonly Action _changeConnection;
     private readonly DispatcherTimer _autoSave;
@@ -47,6 +48,7 @@ public partial class WorkspaceViewModel : ViewModelBase
         _databases = new DatabaseManager(server);
         _checker = new Checker(content, _databases, server) { SampleSize = SampleSize, FullResultRows = FullResultRows };
         _tracer = new QueryTracer(server);
+        _changes = new ChangeTracer(server);
 
         ServerDescription = $"{server.Server} · SQL Server {info.Version} {info.Edition}";
         Assignments = new ObservableCollection<AssignmentViewModel>(
@@ -192,7 +194,7 @@ public partial class WorkspaceViewModel : ViewModelBase
     /// <summary>Raised when an animation is ready. The view opens its window, as view models don't know about windows.</summary>
     public event Action<VisualizerViewModel>? VisualizerReady;
 
-    /// <summary>Animates what the student's query does to each row, using the question's first dataset.</summary>
+    /// <summary>Animates what the student's query or script does to each row, using the question's first dataset.</summary>
     [RelayCommand(CanExecute = nameof(CanCheck))]
     private async Task VisualizeAsync()
     {
@@ -212,11 +214,10 @@ public partial class WorkspaceViewModel : ViewModelBase
             await _databases.EnsureAsync(database, dataset);
             DatabasesReady = true;
 
-            var outcome = await _tracer.TraceAsync(DatabaseManager.DatabaseName(database, dataset), question.Document.Text);
-            if (outcome.Trace is { } trace)
-                VisualizerReady?.Invoke(new VisualizerViewModel(SceneBuilder.Build(trace), trace.Note));
+            if (question.Question.IsScript)
+                await VisualizeChangesAsync(question, database, dataset);
             else
-                question.VisualizerProblem = string.Join(Environment.NewLine, outcome.Problems);
+                await VisualizeQueryAsync(question, DatabaseManager.DatabaseName(database, dataset));
             Status = "Databases ready";
         }
         catch (QueryFailedException ex)
@@ -233,6 +234,39 @@ public partial class WorkspaceViewModel : ViewModelBase
         {
             IsBusy = false;
         }
+    }
+
+    private async Task VisualizeQueryAsync(QuestionViewModel question, string databaseName)
+    {
+        var outcome = await _tracer.TraceAsync(databaseName, question.Document.Text);
+        if (outcome.Trace is { } trace)
+            VisualizerReady?.Invoke(new VisualizerViewModel(SceneBuilder.Build(trace), trace.Note));
+        else
+            question.VisualizerProblem = string.Join(Environment.NewLine, outcome.Problems);
+    }
+
+    /// <summary>The script runs in a transaction that's rolled back, like a check, so the database stays as it was.</summary>
+    private async Task VisualizeChangesAsync(QuestionViewModel question, CourseDatabase database, Dataset dataset)
+    {
+        var setup = _checker.SetupBatches(question.Question);
+        var outcome = await _changes.TraceAsync(DatabaseManager.DatabaseName(database, dataset), setup, question.Document.Text);
+
+        // A COMMIT or ROLLBACK in the script ended the transaction, so its changes may be saved for good.
+        if (outcome.EndedTransaction)
+            await _databases.RebuildAsync(database, dataset);
+
+        if (outcome.Changes.Count == 0)
+        {
+            question.VisualizerProblem = outcome.Problems.Count > 0
+                ? string.Join(Environment.NewLine, outcome.Problems)
+                : "None of the statements the visualizer can show ran.";
+            return;
+        }
+
+        var notes = outcome.Changes.Select(c => c.Note).OfType<string>().Concat(outcome.Notes).Distinct().ToList();
+        VisualizerReady?.Invoke(new VisualizerViewModel(
+            outcome.Changes.Select(ChangeSceneBuilder.Build).ToList(),
+            notes.Count > 0 ? string.Join(" ", notes) : null));
     }
 
     [RelayCommand]

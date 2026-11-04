@@ -5,21 +5,55 @@ using HomeworkValidator.Core.Visualization;
 
 namespace HomeworkValidator.App.ViewModels;
 
-/// <summary>Plays a query's animation: which step is showing, and the Previous, Play, Next and Restart buttons.</summary>
+/// <summary>Plays an animation: which step is showing, and the Previous, Play, Next and Restart buttons.</summary>
 public partial class VisualizerViewModel : ViewModelBase
 {
     private readonly DispatcherTimer _timer = new();
 
     /// <param name="note">Shown above the animation, e.g. when only some of the rows are shown.</param>
     public VisualizerViewModel(VizScene scene, string? note = null)
+        : this([scene], note)
     {
-        Scene = scene;
+    }
+
+    /// <param name="scenes">One per statement of a script, to choose between.</param>
+    /// <param name="note">Shown above the animation, e.g. when only some of the rows are shown.</param>
+    public VisualizerViewModel(IReadOnlyList<VizScene> scenes, string? note = null)
+    {
+        Scenes = scenes;
+        Scene = scenes[0];
         Note = note;
         _timer.Tick += (_, _) => Advance();
         UpdateInterval();
     }
 
-    public VizScene Scene { get; }
+    /// <summary>The animations to choose between, one per statement.</summary>
+    public IReadOnlyList<VizScene> Scenes { get; }
+
+    public bool HasManyScenes => Scenes.Count > 1;
+
+    /// <summary>The animation that's showing.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsInDepth), nameof(CanUseInDepth), nameof(InDepthTip), nameof(SelectedScene))]
+    public partial VizScene Scene { get; set; }
+
+    /// <summary>For the combo box, which sets its selection to null when it gets a different list of statements.</summary>
+    public VizScene? SelectedScene
+    {
+        get => Scene;
+        set
+        {
+            if (value is not null)
+                Scene = value;
+        }
+    }
+
+    partial void OnSceneChanged(VizScene value)
+    {
+        InDepth = false;
+        StartOver();
+    }
+
     public string? Note { get; }
 
     /// <summary>The in-depth view is about joins, so other queries don't offer it.</summary>
@@ -53,15 +87,19 @@ public partial class VisualizerViewModel : ViewModelBase
     public partial bool InDepth { get; set; }
 
     // The two modes have different steps, so switching starts over.
-    partial void OnInDepthChanged(bool value)
+    partial void OnInDepthChanged(bool value) => StartOver();
+
+    private void StartOver()
     {
         Pause();
-        // Step may not change, but the frames it points at have.
         Step = 0;
+
+        // Step may not have changed, but the frames it points at have.
         OnPropertyChanged(nameof(Frame));
         OnPropertyChanged(nameof(Phase));
         OnPropertyChanged(nameof(StepText));
         NextCommand.NotifyCanExecuteChanged();
+        PreviousCommand.NotifyCanExecuteChanged();
     }
 
     private void UpdateInterval() => _timer.Interval = TimeSpan.FromMilliseconds(Math.Max(120, 1100 - Speed * 100));

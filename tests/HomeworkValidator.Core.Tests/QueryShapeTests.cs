@@ -12,16 +12,14 @@ public class QueryShapeTests
     }
 
     [Theory]
-    [InlineData("SELECT VendorState, COUNT(*) FROM Vendors GROUP BY VendorState", "GROUP BY")]
-    [InlineData("SELECT COUNT(*) FROM Vendors", "aggregate functions")]
-    [InlineData("SELECT VendorName FROM Vendors ORDER BY MAX(VendorID)", "aggregate functions")]
+    [InlineData("SELECT VendorState, COUNT(*) FROM Vendors GROUP BY GROUPING SETS ((VendorState), ())", "GROUPING SETS")]
+    [InlineData("SELECT VendorState, SUM(COUNT(*)) OVER () FROM Vendors GROUP BY VendorState", "window functions in a query with GROUP BY")]
     [InlineData("SELECT VendorName FROM Vendors UNION SELECT VendorState FROM Vendors", "UNION")]
     [InlineData("WITH v AS (SELECT * FROM Vendors) SELECT * FROM v", "common table expressions")]
     [InlineData("SELECT * FROM (SELECT * FROM Vendors) v", "a subquery in the FROM clause")]
     [InlineData("SELECT * FROM Terms t JOIN (SELECT * FROM Vendors) v ON t.TermsID = v.DefaultTermsID", "a subquery in the FROM clause")]
     [InlineData("SELECT * FROM Vendors v CROSS APPLY (SELECT 1 AS One) x", "CROSS APPLY")]
     [InlineData("SELECT * FROM Vendors ORDER BY VendorID OFFSET 5 ROWS", "OFFSET")]
-    [InlineData("SELECT ROW_NUMBER() OVER (ORDER BY VendorID) FROM Vendors", "window functions")]
     [InlineData("SELECT 1 + 1", "a query without a FROM clause")]
     [InlineData("SELECT * FROM Terms t JOIN Vendors v ON t.TermsID = v.DefaultTermsID ORDER BY 5", "a column number")]
     public void Says_which_feature_it_cant_show(string sql, string feature)
@@ -135,6 +133,78 @@ public class QueryShapeTests
         Assert.EndsWith("ORDER BY v.VendorName DESC", sql);
         Assert.DoesNotContain("TOP", sql);
         Assert.DoesNotContain("WHERE", sql);
+    }
+
+    [Fact]
+    public void Finds_group_keys_and_what_the_aggregates_read()
+    {
+        var shape = Shape("""
+            SELECT v.VendorState, COUNT(*) AS Invoices, SUM(i.InvoiceTotal - i.CreditTotal) AS Owed, COUNT(DISTINCT i.TermsID) AS Terms
+            FROM Vendors v JOIN Invoices i ON v.VendorID = i.VendorID
+            WHERE i.PaymentDate IS NULL
+            GROUP BY v.VendorState
+            HAVING COUNT(*) > 1 AND MAX(i.InvoiceDate) > '2023-01-01'
+            ORDER BY Owed DESC
+            """);
+
+        Assert.True(shape.IsGrouped);
+        Assert.Equal(["v.VendorState"], shape.GroupKeys);
+        Assert.Equal("GROUP BY v.VendorState", shape.GroupClause);
+        Assert.Equal(["COUNT(*) > 1", "MAX(i.InvoiceDate) > '2023-01-01'"], shape.HavingConditions);
+
+        // COUNT(*) reads no column. WHERE's columns are shown too, so students can see why a row was left out of its group.
+        Assert.Equal(
+            ["v.VendorState", "i.InvoiceTotal - i.CreditTotal", "i.TermsID", "i.InvoiceDate", "i.PaymentDate"],
+            shape.RowColumns.Select(c => c.Expression));
+        Assert.Equal(1, shape.KeyColumns);
+        Assert.Equal([1, 2, 3], shape.CalculatedColumns);
+    }
+
+    [Fact]
+    public void An_aggregate_without_GROUP_BY_is_one_group()
+    {
+        var shape = Shape("SELECT COUNT(*) AS OrderCount, SUM(TaxAmount) AS TaxTotal FROM Orders");
+
+        Assert.True(shape.IsGrouped);
+        Assert.Empty(shape.GroupKeys);
+        Assert.Null(shape.GroupClause);
+    }
+
+    [Theory]
+    [InlineData("SELECT AccountNo, SUM(InvoiceLineItemAmount) FROM InvoiceLineItems GROUP BY AccountNo WITH ROLLUP", "WITH ROLLUP")]
+    [InlineData("SELECT AccountNo, SUM(InvoiceLineItemAmount) FROM InvoiceLineItems GROUP BY AccountNo WITH CUBE", "WITH CUBE")]
+    [InlineData("SELECT AccountNo, SUM(InvoiceLineItemAmount) FROM InvoiceLineItems GROUP BY ROLLUP (AccountNo)", "ROLLUP")]
+    [InlineData("SELECT AccountNo, SUM(InvoiceLineItemAmount) FROM InvoiceLineItems GROUP BY CUBE (AccountNo)", "CUBE")]
+    public void Recognizes_the_ways_to_ask_for_summary_rows(string sql, string summaryRows)
+    {
+        var shape = Shape(sql);
+
+        Assert.Equal(summaryRows, shape.SummaryRows);
+        Assert.Equal(["AccountNo"], shape.GroupKeys);
+    }
+
+    [Fact]
+    public void A_window_function_partitions_without_grouping()
+    {
+        var shape = Shape("""
+            SELECT VendorID, InvoiceTotal, SUM(InvoiceTotal) OVER (PARTITION BY VendorID) AS VendorTotal
+            FROM Invoices
+            WHERE InvoiceTotal > 100
+            """);
+
+        Assert.True(shape.IsWindowed);
+        Assert.False(shape.IsGrouped);
+        Assert.Equal("PARTITION BY VendorID", shape.GroupClause);
+        Assert.Equal(["VendorID", "InvoiceTotal"], shape.RowColumns.Select(c => c.Expression));
+        Assert.False(shape.MixedPartitions);
+    }
+
+    [Fact]
+    public void Notices_window_functions_that_partition_differently()
+    {
+        var shape = Shape("SELECT SUM(InvoiceTotal) OVER (PARTITION BY VendorID), SUM(InvoiceTotal) OVER (PARTITION BY TermsID) FROM Invoices");
+
+        Assert.True(shape.MixedPartitions);
     }
 
     [Fact]

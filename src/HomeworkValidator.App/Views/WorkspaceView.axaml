@@ -108,7 +108,7 @@
                         <Button Classes="accent" Content="Check (F5)" Command="{Binding CheckCommand}" />
                         <Button Content="Visualize" Command="{Binding VisualizeCommand}"
                                 IsVisible="{Binding SelectedQuestion.CanVisualize, FallbackValue=False}"
-                                ToolTip.Tip="Watch what your query does to each row, step by step." />
+                                ToolTip.Tip="Watch what your SQL does to each row, step by step. Nothing is saved to the database." />
                         <Button Content="Open .sql file..." Click="OpenFile_Click" />
                         <!-- Only once the instructor allows it for the assignment (showSolutions in assignment.yaml) -->
                         <ToggleButton Content="Show solution" IsChecked="{Binding SelectedQuestion.IsSolutionShown, FallbackValue=False}"

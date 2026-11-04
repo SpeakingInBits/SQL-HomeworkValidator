@@ -336,6 +336,10 @@ public static class ScriptAnalyzer
         Parse(sql)?.Batches.SelectMany(b => b.Statements).OfType<SelectStatement>().SingleOrDefault()
         ?? throw new ArgumentException("Expected a single SELECT statement.", nameof(sql));
 
+    /// <summary>Parses text that a script analysis returned as runnable.</summary>
+    internal static TSqlScript ParseScript(string sql) =>
+        Parse(sql) ?? throw new ArgumentException("Expected a script without syntax errors.", nameof(sql));
+
     private static TSqlScript? Parse(string sql)
     {
         var parser = new TSql170Parser(initialQuotedIdentifiers: true);

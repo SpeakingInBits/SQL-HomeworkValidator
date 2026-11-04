@@ -14,6 +14,7 @@ namespace HomeworkValidator.App.Tests;
 /// <c>Server=localhost;Integrated Security=true;TrustServerCertificate=true</c>.
 /// </summary>
 [Trait("Category", "NeedsSqlServer")]
+[Collection(SqlServerCollection.Name)]
 public class EndToEndTests
 {
     [AvaloniaFact]
