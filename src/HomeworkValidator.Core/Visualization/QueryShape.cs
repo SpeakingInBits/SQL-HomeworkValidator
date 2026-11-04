@@ -107,6 +107,9 @@ public sealed class QueryShape
     /// <summary>True when window functions partition differently. Only the first one's partitions are shown.</summary>
     public bool MixedPartitions { get; private set; }
 
+    /// <summary>A query with no FROM clause: its select list as written, which makes the one row it returns. Null for every other query.</summary>
+    public IReadOnlyList<string>? Expressions { get; private set; }
+
     public static QueryShape Analyze(string sql)
     {
         var analysis = ScriptAnalyzer.AnalyzeSelect(sql);
@@ -140,7 +143,7 @@ public sealed class QueryShape
             return "this kind of query";
 
         if (spec.FromClause is null)
-            return "a query without a FROM clause";
+            return ReadExpressions(spec);
         if (select.QueryExpression.OffsetClause is not null || spec.OffsetClause is not null)
             return "OFFSET and FETCH";
         if (select.QueryExpression.ForClause is not null || spec.ForClause is not null)
@@ -239,6 +242,23 @@ public sealed class QueryShape
             ExtraColumns = FindExtraColumns(spec, orderBy);
         }
 
+        return null;
+    }
+
+    /// <summary>Reads a query with no FROM clause; returns what it can't show, if anything.</summary>
+    private string? ReadExpressions(QuerySpecification spec)
+    {
+        var functions = new FunctionVisitor();
+        foreach (var element in spec.SelectElements)
+            element.Accept(functions);
+
+        if (spec.WhereClause is not null || spec.GroupByClause is not null || spec.HavingClause is not null || spec.TopRowFilter is not null
+            || functions.HasAggregate || functions.Windows.Count > 0)
+            return "a query with no FROM clause that also uses WHERE, GROUP BY, HAVING, TOP or aggregate functions";
+        if (spec.SelectElements.Any(e => e is not SelectScalarExpression))
+            return "assigning to a variable";
+
+        Expressions = spec.SelectElements.Cast<SelectScalarExpression>().Select(e => Text(e.Expression)).ToList();
         return null;
     }
 

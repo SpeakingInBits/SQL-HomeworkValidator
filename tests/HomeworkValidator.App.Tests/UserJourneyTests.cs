@@ -234,6 +234,33 @@ public class UserJourneyTests
 
     [AvaloniaFact]
     [Trait("Category", "NeedsSqlServer")]
+    public async Task Student_watches_a_row_made_without_a_table()
+    {
+        var app = AppDriver.Launch(new MainViewModel(Content, appDataFolder: TestAppBuilder.NewTempFolder()), "visualizer-no-from");
+        await ConnectAsync(app);
+
+        app.Click(app.TreeItem("7. Tax calculation without a FROM"));
+        app.WriteAnswer("SELECT 100 AS Price,\n.07 AS TaxRate,\n100 * .07 AS TaxAmount,\n100 + (100 * .07) AS Total;");
+        app.Click(app.Button("Visualize"));
+        var visualizer = await app.WaitForVisualizerAsync();
+        Assert.True(app.VisualizerShows("SELECT without FROM"));
+        app.VisualizerScreenshot(visualizer, "start");
+
+        var next = app.VisualizerButton("Next");
+        app.Click(next);
+        app.Click(next);
+        app.Click(next);
+        Assert.True(app.VisualizerShows("TaxAmount: 100 * .07 = 7"));
+        app.VisualizerScreenshot(visualizer, "third-value");
+
+        app.Click(next);
+        app.Click(next);
+        Assert.True(app.VisualizerShows("One row: Price = 100, TaxRate = 0.07, TaxAmount = 7, Total = 107"));
+        app.VisualizerScreenshot(visualizer, "done");
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "NeedsSqlServer")]
     public async Task Student_watches_rows_go_into_groups()
     {
         var app = AppDriver.Launch(new MainViewModel(Content, appDataFolder: TestAppBuilder.NewTempFolder()), "visualizer-groups");

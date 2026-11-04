@@ -28,6 +28,51 @@ public class SceneBuilderTests
     private static IEnumerable<string> Cells(VizScene scene, string table) =>
         scene.Nodes.Where(n => n.Id.StartsWith($"{table}-row-", StringComparison.Ordinal)).Select(n => n.Cells![0]);
 
+    private static QueryTrace Tax() => new("", [], [], ["Price", "(no name)"], 2, [["100", "7"]], [[]], null, null, [])
+    {
+        Expressions = ["100", "100 * .07"],
+    };
+
+    [Fact]
+    public void A_query_with_no_FROM_clause_fills_in_its_one_row_a_cell_at_a_time()
+    {
+        var scene = SceneBuilder.Build(Tax());
+
+        Assert.Equal("SELECT without FROM", scene.Title);
+        Assert.Equal(
+            ["There's no table to read, so SELECT works out one row from its expressions", "Price: 100", "(no name): 100 * .07 = 7", "One row: Price = 100, (no name) = 7"],
+            scene.Frames.Select(f => f.Phase));
+
+        // Each step shows the row as it stands, with the new value picked out.
+        var second = scene.Nodes.Single(n => n.Id == "row-step-1");
+        Assert.Equal(["100", "7"], second.Cells!);
+        Assert.Equal([1], second.HighlightedCells);
+        Assert.Equal(["100", ""], scene.Nodes.Single(n => n.Id == "row-step-0").Cells!);
+    }
+
+    [Fact]
+    public void Only_one_version_of_the_row_shows_at_a_time()
+    {
+        var scene = SceneBuilder.Build(Tax());
+
+        var steps = scene.Nodes.Where(n => n.Id.StartsWith("row-step-", StringComparison.Ordinal)).Select(n => n.Id).ToList();
+        Assert.All(scene.Frames.Skip(1), f => Assert.Single(steps, id => !f.Hidden.Contains(id)));
+        Assert.All(steps, id => Assert.Contains(id, scene.Frames[0].Hidden));
+        Assert.Empty(scene.Nodes.Single(n => n.Id == steps[^1]).HighlightedCells);
+    }
+
+    [Fact]
+    public void Each_expression_connects_to_the_row_while_its_value_arrives()
+    {
+        var scene = SceneBuilder.Build(Tax());
+
+        var frame = scene.Frames[2];
+        Assert.Equal(VizState.Active, frame.States["expressions-row-1"]);
+        Assert.Equal(VizState.New, frame.States["row-step-1"]);
+        var edge = scene.Edges[Assert.Single(frame.Edges)];
+        Assert.Equal(("expressions-row-1", "row-step-1"), (edge.From, edge.To));
+    }
+
     [Fact]
     public void A_plain_query_is_a_scan_that_reads_each_row()
     {

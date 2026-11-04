@@ -96,6 +96,12 @@ public sealed record QueryTrace(
     /// <summary>GROUP BY or window functions; null for queries without them.</summary>
     public TraceGrouping? Grouping { get; init; }
 
+    /// <summary>
+    /// A query with no FROM clause: the expression behind each of <see cref="Columns"/>. <see cref="Rows"/> is
+    /// the one row they make. Null for every other query.
+    /// </summary>
+    public IReadOnlyList<string>? Expressions { get; init; }
+
     /// <summary>The rows of the end result before any cuts: indexes for <see cref="ResultCells"/>.</summary>
     public IReadOnlyList<int> Result
     {
