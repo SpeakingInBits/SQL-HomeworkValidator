@@ -121,7 +121,7 @@ public sealed class QueryShape
             ? shape
             : new QueryShape(query)
             {
-                Problems = [$"The visualizer can't show {unsupported} yet. It shows joins, WHERE, GROUP BY, HAVING, window functions, ORDER BY, DISTINCT and TOP."],
+                Problems = [$"The visualizer can't show {unsupported} yet. It shows joins, WHERE, GROUP BY, HAVING, window functions, UNION, ORDER BY, DISTINCT and TOP."],
             };
     }
 

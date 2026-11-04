@@ -21,9 +21,9 @@
         <!-- What the query is -->
         <Border Grid.Row="0" Background="{DynamicResource PanelBrush}" Padding="16,10">
             <StackPanel Spacing="2">
-                <!-- A script can have several statements; each has its own animation. -->
+                <!-- A script's statements and a UNION's queries each have their own animation. -->
                 <ComboBox ItemsSource="{Binding Scenes}" SelectedItem="{Binding SelectedScene}" IsVisible="{Binding HasManyScenes}"
-                          MinWidth="280" Margin="0,0,0,6" ToolTip.Tip="Choose a statement">
+                          MinWidth="280" Margin="0,0,0,6" ToolTip.Tip="Choose a step">
                     <ComboBox.ItemTemplate>
                         <DataTemplate x:DataType="viz:VizScene">
                             <TextBlock Text="{Binding Title}" />

@@ -25,6 +25,7 @@ public partial class WorkspaceViewModel : ViewModelBase
     private readonly DatabaseManager _databases;
     private readonly Checker _checker;
     private readonly QueryTracer _tracer;
+    private readonly SetTracer _sets;
     private readonly ChangeTracer _changes;
     private readonly AnswerStore _answers;
     private readonly Action _changeConnection;
@@ -48,6 +49,7 @@ public partial class WorkspaceViewModel : ViewModelBase
         _databases = new DatabaseManager(server);
         _checker = new Checker(content, _databases, server) { SampleSize = SampleSize, FullResultRows = FullResultRows };
         _tracer = new QueryTracer(server);
+        _sets = new SetTracer(server);
         _changes = new ChangeTracer(server);
 
         ServerDescription = $"{server.Server} · SQL Server {info.Version} {info.Edition}";
@@ -238,9 +240,25 @@ public partial class WorkspaceViewModel : ViewModelBase
 
     private async Task VisualizeQueryAsync(QuestionViewModel question, string databaseName)
     {
+        if (SetShape.Analyze(question.Document.Text) is { } set)
+        {
+            await VisualizeSetAsync(question, databaseName, set);
+            return;
+        }
+
         var outcome = await _tracer.TraceAsync(databaseName, question.Document.Text);
         if (outcome.Trace is { } trace)
             VisualizerReady?.Invoke(new VisualizerViewModel(SceneBuilder.Build(trace), trace.Note));
+        else
+            question.VisualizerProblem = string.Join(Environment.NewLine, outcome.Problems);
+    }
+
+    /// <summary>UNION, INTERSECT and EXCEPT: an animation for each query, and one that combines their rows.</summary>
+    private async Task VisualizeSetAsync(QuestionViewModel question, string databaseName, SetShape set)
+    {
+        var outcome = await _sets.TraceAsync(databaseName, set);
+        if (outcome.Trace is { } trace)
+            VisualizerReady?.Invoke(new VisualizerViewModel(SetSceneBuilder.Build(trace), SetSceneBuilder.Note(trace)));
         else
             question.VisualizerProblem = string.Join(Environment.NewLine, outcome.Problems);
     }
