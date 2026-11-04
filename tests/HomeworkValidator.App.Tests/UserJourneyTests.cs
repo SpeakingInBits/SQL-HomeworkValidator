@@ -546,7 +546,7 @@ public class UserJourneyTests
     }
 
     /// <summary>Fills in the connection page from HV_TEST_CONNECTION_STRING, connects, and waits for the databases.</summary>
-    private static async Task ConnectAsync(AppDriver app)
+    internal static async Task ConnectAsync(AppDriver app)
     {
         var server = TestServer();
         app.Fill(app.TextBox("Server"), server.DataSource);

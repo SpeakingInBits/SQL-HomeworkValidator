@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SQL Homework Validator</title>
+  <meta name="description" content="A free desktop app that checks your SQL Server homework and shows what your SQL does to each row, step by step.">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --panel: #f4f6f8;
+      --text: #202124;
+      --muted: #5f6368;
+      --border: #dadce0;
+      --accent: #0b63ce;
+      --accent-text: #ffffff;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #17181a;
+        --panel: #202124;
+        --text: #e8eaed;
+        --muted: #a8adb3;
+        --border: #3c4043;
+        --accent: #8ab4f8;
+        --accent-text: #17181a;
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+
+    a { color: var(--accent); }
+    img { display: block; max-width: 100%; height: auto; }
+    h1, h2, h3 { line-height: 1.2; margin: 0; }
+    p { margin: 0; }
+
+    .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+
+    .hero { padding: 64px 0 40px; text-align: center; }
+    .hero img.icon { width: 72px; height: 72px; margin: 0 auto 16px; }
+    .hero h1 { font-size: clamp(2rem, 6vw, 3rem); letter-spacing: -0.02em; }
+    .hero .lead { max-width: 620px; margin: 16px auto 0; font-size: 1.2rem; color: var(--muted); }
+
+    .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 28px; }
+
+    .button {
+      display: inline-block;
+      padding: 10px 22px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+
+    .version { margin-top: 20px; font-size: 0.9rem; color: var(--muted); }
+
+    .shot { display: block; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .shot img { width: 100%; }
+
+    section { padding: 44px 0; }
+    section > h2 { font-size: 1.7rem; margin-bottom: 8px; }
+    section > .intro { max-width: 700px; color: var(--muted); }
+
+    .feature { display: grid; grid-template-columns: 2fr 3fr; gap: 32px; align-items: center; margin-top: 40px; }
+    .feature h3 { font-size: 1.2rem; margin-bottom: 8px; }
+    .feature p { color: var(--muted); }
+
+    .lists { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 28px; }
+    .card { padding: 20px 24px; background: var(--panel); border-radius: 10px; }
+    .card h3 { font-size: 1.1rem; margin-bottom: 8px; }
+    .card ul { margin: 0; padding-left: 20px; }
+    .card li + li { margin-top: 4px; }
+
+    ol.steps { max-width: 700px; margin: 20px 0 0; padding-left: 24px; }
+    ol.steps li + li { margin-top: 8px; }
+
+    footer { padding: 28px 0 40px; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.9rem; }
+
+    @media (max-width: 760px) {
+      .hero { padding-top: 40px; }
+      .feature, .lists { grid-template-columns: 1fr; gap: 16px; }
+      section { padding: 32px 0; }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <img class="icon" src="images/icon.png" alt="" width="72" height="72">
+      <h1>SQL Homework Validator</h1>
+      <p class="lead">Check your SQL Server homework before you hand it in, and watch what your SQL does to each row, step by step.</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/SpeakingInBits/SQL-HomeworkValidator/releases/latest">Download the app</a>
+        <a class="button" href="https://github.com/SpeakingInBits/SQL-HomeworkValidator">View on GitHub</a>
+      </div>
+      <!-- Update this version when the page is brought up to date with a release. See "Website" in the README. -->
+      <p class="version">This page was last updated for version 0.5.0. Newer versions may have changes that aren't shown here: see the <a href="https://github.com/SpeakingInBits/SQL-HomeworkValidator/releases">releases</a>.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <a class="shot" href="images/check-result.png">
+      <img src="images/check-result.png" width="1200" height="860"
+           alt="The app showing a question with a student's query. The check failed, and tables list the rows that are missing from the result.">
+    </a>
+
+    <section>
+      <h2>Know where your answer stands</h2>
+      <p class="intro">Connect the app to your own SQL Server, pick a question, write your query and press F5. It runs your answer next to the instructor's solution on several sets of data, then shows you exactly which rows are missing or shouldn't be there. Your own databases are never touched.</p>
+    </section>
+
+    <section>
+      <h2>Watch your SQL run</h2>
+      <p class="intro">Click Visualize on a question to see your SQL play back one step at a time. SQL Server runs it for real and reports what happens to each row, so what you see always ends on your real result.</p>
+
+      <div class="feature">
+        <div>
+          <h3>Joins</h3>
+          <p>See which rows combine into each joined row, and which rows an outer join keeps with NULLs. For a query with one join, the In-depth view shows every comparison, including the ones where ON is false.</p>
+        </div>
+        <a class="shot" href="images/visualizer-join.png"><img src="images/visualizer-join.png" width="1200" height="760" loading="lazy"
+             alt="A LEFT JOIN in the visualizer. Lines connect a category to each product, green where ON is true and red where it's false."></a>
+      </div>
+
+      <div class="feature">
+        <div>
+          <h3>GROUP BY and HAVING</h3>
+          <p>Rows drop into their groups, then each group collapses into one row. HAVING tests the groups the way WHERE tests rows. ROLLUP, CUBE and window functions are covered too.</p>
+        </div>
+        <a class="shot" href="images/visualizer-group-by.png"><img src="images/visualizer-group-by.png" width="1200" height="760" loading="lazy"
+             alt="GROUP BY in the visualizer. Six Guitars rows are highlighted in their group, with a line to the one row they become."></a>
+      </div>
+
+      <div class="feature">
+        <div>
+          <h3>INSERT, UPDATE and DELETE</h3>
+          <p>See the table before and after, with each row tested and every changed value highlighted. Nothing is saved: your script runs in a transaction that's rolled back.</p>
+        </div>
+        <a class="shot" href="images/visualizer-update.png"><img src="images/visualizer-update.png" width="1200" height="760" loading="lazy"
+             alt="An UPDATE in the visualizer. A row moves from the before table to the after table, with its new DiscountPercent highlighted."></a>
+      </div>
+
+      <div class="feature">
+        <div>
+          <h3>UNION, INTERSECT and EXCEPT</h3>
+          <p>Each query plays on its own, then a last step combines their rows, showing which ones are duplicates or are found in the other query.</p>
+        </div>
+        <a class="shot" href="images/visualizer-union.png"><img src="images/visualizer-union.png" width="1200" height="760" loading="lazy"
+             alt="UNION in the visualizer. Rows from two queries are added to the result one at a time."></a>
+      </div>
+
+      <div class="feature">
+        <div>
+          <h3>SELECT with no FROM</h3>
+          <p>With no table to read, each expression works out one value of a single row, and you see the row fill in.</p>
+        </div>
+        <a class="shot" href="images/visualizer-no-from.png"><img src="images/visualizer-no-from.png" width="1200" height="760" loading="lazy"
+             alt="A SELECT with no FROM clause in the visualizer. An expression is highlighted, with a line to its value in the result row."></a>
+      </div>
+    </section>
+
+    <section>
+      <h2>Features</h2>
+      <div class="lists">
+        <div class="card">
+          <h3>Checking your answers</h3>
+          <ul>
+            <li>SELECT queries, INSERT, UPDATE and DELETE scripts, and database scripting such as CREATE TABLE, indexes and constraints</li>
+            <li>Tests each answer on several sets of data, including edge cases that catch queries that only work by luck</li>
+            <li>Shows the rows that are missing or unexpected, and your whole result next to the expected one</li>
+            <li>Checks that ORDER BY really sorts by what the question asks for</li>
+            <li>Enforces what a question requires or forbids, such as using a join</li>
+            <li>Gives hints when an answer fails, and shows solutions when your instructor allows it</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Writing your SQL</h3>
+          <ul>
+            <li>SQL editor with syntax highlighting</li>
+            <li>Optional autocomplete for keywords, tables and columns</li>
+            <li>Answers are saved automatically, with each question's pass or fail mark</li>
+            <li>Open a .sql file and it stays linked, so saving it in SSMS or VS Code updates your answer</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>The visualizer</h3>
+          <ul>
+            <li>Joins, WHERE, GROUP BY, HAVING, window functions, ORDER BY, DISTINCT and TOP</li>
+            <li>UNION, INTERSECT and EXCEPT</li>
+            <li>INSERT, UPDATE and DELETE, without changing anything</li>
+            <li>Play, step, change speed, zoom and pan, which works well on a classroom display</li>
+            <li>Follows the current row down long tables</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Running the app</h3>
+          <ul>
+            <li>Windows, macOS and Linux</li>
+            <li>Works with a local SQL Server, or the Docker image on macOS and Linux</li>
+            <li>Updates itself in the background</li>
+            <li>Can remember your SQL Server password in your system's secure storage</li>
+            <li>Follows your system's light or dark theme</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Getting started</h2>
+      <ol class="steps">
+        <li>Install SQL Server on your computer: a local install on Windows, or the Docker image on macOS and Linux.</li>
+        <li><a href="https://github.com/SpeakingInBits/SQL-HomeworkValidator/releases/latest">Download the app</a> for your system. The <a href="https://github.com/SpeakingInBits/SQL-HomeworkValidator#installing">install steps</a> explain the warnings you'll see the first time you open it.</li>
+        <li>Open the app and connect to your server. It builds its own copies of the course databases, which takes a few seconds.</li>
+        <li>Pick a question, write your query and press F5.</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p>Made by <a href="https://github.com/SpeakingInBits">Speaking In Bits</a>. Also see the <a href="https://speakinginbits.github.io/SQL-Visualizer/">SQL Visualizer</a> website, which runs in your browser.</p>
+    </div>
+  </footer>
+</body>
+</html>
