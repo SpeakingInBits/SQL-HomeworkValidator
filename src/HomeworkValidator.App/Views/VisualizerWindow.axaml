@@ -1,0 +1,73 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:HomeworkValidator.App.ViewModels"
+        xmlns:controls="using:HomeworkValidator.App.Controls"
+        x:Class="HomeworkValidator.App.Views.VisualizerWindow"
+        x:DataType="vm:VisualizerViewModel"
+        Icon="/Assets/icon.ico"
+        Title="Query visualizer"
+        Width="1200" Height="760" MinWidth="720" MinHeight="420"
+        WindowStartupLocation="CenterOwner">
+
+    <!-- The arrow keys step through the animation. Esc closes the window (in the code-behind). -->
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Left" Command="{Binding PreviousCommand}" />
+        <KeyBinding Gesture="Right" Command="{Binding NextCommand}" />
+    </Window.KeyBindings>
+
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+
+        <!-- What the query is -->
+        <Border Grid.Row="0" Background="{DynamicResource PanelBrush}" Padding="16,10">
+            <StackPanel Spacing="2">
+                <TextBlock Classes="heading" Text="{Binding Scene.Title}" TextTrimming="CharacterEllipsis" />
+                <TextBlock Classes="muted" Text="{Binding Scene.Subtitle}" TextTrimming="CharacterEllipsis"
+                           FontFamily="{StaticResource CodeFont}" FontSize="12"
+                           ToolTip.Tip="{Binding Scene.Subtitle}" />
+            </StackPanel>
+        </Border>
+
+        <!-- Playback -->
+        <Border Grid.Row="1" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource DividerBrush}"
+                BorderThickness="0,0,0,1" Padding="16,0,16,8">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto" ColumnSpacing="20">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
+                    <Button Content="Previous" Command="{Binding PreviousCommand}" ToolTip.Tip="Left arrow" />
+                    <Button Classes="accent" Content="{Binding PlayLabel}" Command="{Binding PlayPauseCommand}" MinWidth="64"
+                            HorizontalContentAlignment="Center" />
+                    <Button Content="Next" Command="{Binding NextCommand}" ToolTip.Tip="Right arrow" />
+                    <Button Content="Restart" Command="{Binding RestartCommand}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="Speed" VerticalAlignment="Center" />
+                    <Slider Minimum="1" Maximum="10" TickFrequency="1" IsSnapToTickEnabled="True" Width="110"
+                            VerticalAlignment="Center" Value="{Binding Speed}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+                    <Button Content="−" Click="ZoomOut_Click" ToolTip.Tip="Zoom out" MinWidth="34" HorizontalContentAlignment="Center" />
+                    <Button Content="Fit" Click="Fit_Click" ToolTip.Tip="Show everything" />
+                    <Button Content="+" Click="ZoomIn_Click" ToolTip.Tip="Zoom in" MinWidth="34" HorizontalContentAlignment="Center" />
+                </StackPanel>
+
+                <!-- A disabled control doesn't show its tooltip unless it's told to. -->
+                <CheckBox Grid.Column="3" Content="In-depth" IsChecked="{Binding InDepth}" IsEnabled="{Binding CanUseInDepth}"
+                          IsVisible="{Binding ShowsInDepth}" ToolTip.Tip="{Binding InDepthTip}" ToolTip.ShowOnDisabled="True" />
+
+                <TextBlock Grid.Column="5" Classes="muted" Text="{Binding StepText}" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="2" Classes="hint" Margin="16,8,16,0" IsVisible="{Binding Note, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Text="{Binding Note}" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- What's happening right now -->
+        <TextBlock Grid.Row="3" Margin="16,8,16,0" FontWeight="SemiBold" Text="{Binding Phase}" TextTrimming="CharacterEllipsis" />
+
+        <controls:VisualizerCanvas x:Name="Canvas" Grid.Row="4" Scene="{Binding Scene}" Frame="{Binding Frame}" />
+
+        <TextBlock Grid.Row="5" Classes="muted" FontSize="12" Margin="16,0,16,8" Text="Scroll to zoom. Drag to move around." />
+    </Grid>
+</Window>

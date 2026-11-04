@@ -151,6 +151,13 @@ public partial class QuestionViewModel : ViewModelBase
         LinkedFileChanged = false;
     }
 
+    /// <summary>Only queries have rows to watch; scripts that change the database don't.</summary>
+    public bool CanVisualize => !Question.IsScript;
+
+    /// <summary>Why the visualizer couldn't show the answer: a mistake in it, or a feature it doesn't show.</summary>
+    [ObservableProperty]
+    public partial string? VisualizerProblem { get; set; }
+
     public bool CanShowSolution { get; }
 
     /// <summary>Set by the "Show solution" toggle.</summary>

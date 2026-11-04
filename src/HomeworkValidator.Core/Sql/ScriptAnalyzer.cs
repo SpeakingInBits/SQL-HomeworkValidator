@@ -331,6 +331,11 @@ public static class ScriptAnalyzer
         _ => feature.ToString(),
     };
 
+    /// <summary>The SELECT statement in text that <see cref="AnalyzeSelect"/> returned as runnable.</summary>
+    internal static SelectStatement ParseSelect(string sql) =>
+        Parse(sql)?.Batches.SelectMany(b => b.Statements).OfType<SelectStatement>().SingleOrDefault()
+        ?? throw new ArgumentException("Expected a single SELECT statement.", nameof(sql));
+
     private static TSqlScript? Parse(string sql)
     {
         var parser = new TSql170Parser(initialQuotedIdentifiers: true);

@@ -7,6 +7,7 @@ using HomeworkValidator.Core.Checking;
 using HomeworkValidator.Core.Content;
 using HomeworkValidator.Core.Execution;
 using HomeworkValidator.Core.Sql;
+using HomeworkValidator.Core.Visualization;
 using Microsoft.Data.SqlClient;
 
 namespace HomeworkValidator.App.ViewModels;
@@ -23,6 +24,7 @@ public partial class WorkspaceViewModel : ViewModelBase
     private readonly ContentLibrary _content;
     private readonly DatabaseManager _databases;
     private readonly Checker _checker;
+    private readonly QueryTracer _tracer;
     private readonly AnswerStore _answers;
     private readonly Action _changeConnection;
     private readonly DispatcherTimer _autoSave;
@@ -44,6 +46,7 @@ public partial class WorkspaceViewModel : ViewModelBase
         AutoComplete = _settings.AutoComplete;
         _databases = new DatabaseManager(server);
         _checker = new Checker(content, _databases, server) { SampleSize = SampleSize, FullResultRows = FullResultRows };
+        _tracer = new QueryTracer(server);
 
         ServerDescription = $"{server.Server} · SQL Server {info.Version} {info.Edition}";
         Assignments = new ObservableCollection<AssignmentViewModel>(
@@ -69,12 +72,14 @@ public partial class WorkspaceViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SelectedQuestion))]
     [NotifyCanExecuteChangedFor(nameof(CheckCommand))]
+    [NotifyCanExecuteChangedFor(nameof(VisualizeCommand))]
     public partial object? SelectedNode { get; set; }
 
     public QuestionViewModel? SelectedQuestion => SelectedNode as QuestionViewModel;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CheckCommand))]
+    [NotifyCanExecuteChangedFor(nameof(VisualizeCommand))]
     [NotifyCanExecuteChangedFor(nameof(SetUpDatabasesCommand))]
     public partial bool IsBusy { get; set; }
 
@@ -172,6 +177,52 @@ public partial class WorkspaceViewModel : ViewModelBase
         {
             Problem = $"This question's content has a problem, so it can't be checked. Tell your instructor: {ex.Message}";
             Status = "";
+        }
+        catch (Exception ex) when (ex is SqlException or InvalidOperationException or ContentException)
+        {
+            Problem = ex.Message;
+            Status = "";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>Raised when an animation is ready. The view opens its window, as view models don't know about windows.</summary>
+    public event Action<VisualizerViewModel>? VisualizerReady;
+
+    /// <summary>Animates what the student's query does to each row, using the question's first dataset.</summary>
+    [RelayCommand(CanExecute = nameof(CanCheck))]
+    private async Task VisualizeAsync()
+    {
+        if (SelectedQuestion is not { } question)
+            return;
+
+        question.RefreshLinkedFile();
+        question.Save(_answers);
+        question.VisualizerProblem = null;
+        IsBusy = true;
+        Problem = null;
+        Status = $"Visualizing {question.Question.Id}...";
+        try
+        {
+            var database = _content.GetDatabase(question.Question.Database);
+            var dataset = database.GetDataset(question.Question.Datasets[0]);
+            await _databases.EnsureAsync(database, dataset);
+            DatabasesReady = true;
+
+            var outcome = await _tracer.TraceAsync(DatabaseManager.DatabaseName(database, dataset), question.Document.Text);
+            if (outcome.Trace is { } trace)
+                VisualizerReady?.Invoke(new VisualizerViewModel(SceneBuilder.Build(trace), trace.Note));
+            else
+                question.VisualizerProblem = string.Join(Environment.NewLine, outcome.Problems);
+            Status = "Databases ready";
+        }
+        catch (QueryFailedException ex)
+        {
+            question.VisualizerProblem = ex.Message;
+            Status = "Databases ready";
         }
         catch (Exception ex) when (ex is SqlException or InvalidOperationException or ContentException)
         {

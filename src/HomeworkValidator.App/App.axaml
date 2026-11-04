@@ -19,6 +19,10 @@
                     <SolidColorBrush x:Key="MutedBrush" Color="#5F6368" />
                     <SolidColorBrush x:Key="PanelBrush" Color="#F7F7F8" />
                     <SolidColorBrush x:Key="DividerBrush" Color="#DADCE0" />
+                    <SolidColorBrush x:Key="VizTextBrush" Color="#202124" />
+                    <SolidColorBrush x:Key="VizAccentBrush" Color="#1A63C7" />
+                    <SolidColorBrush x:Key="VizActiveBrush" Color="#B06000" />
+                    <SolidColorBrush x:Key="VizOuterBrush" Color="#7B3FB5" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="PassBrush" Color="#81C995" />
@@ -29,6 +33,10 @@
                     <SolidColorBrush x:Key="MutedBrush" Color="#9AA0A6" />
                     <SolidColorBrush x:Key="PanelBrush" Color="#202124" />
                     <SolidColorBrush x:Key="DividerBrush" Color="#3C4043" />
+                    <SolidColorBrush x:Key="VizTextBrush" Color="#E8EAED" />
+                    <SolidColorBrush x:Key="VizAccentBrush" Color="#8AB4F8" />
+                    <SolidColorBrush x:Key="VizActiveBrush" Color="#FDD663" />
+                    <SolidColorBrush x:Key="VizOuterBrush" Color="#C58AF9" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>

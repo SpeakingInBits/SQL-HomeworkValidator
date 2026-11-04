@@ -1,5 +1,6 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Threading;
 using HomeworkValidator.App.ViewModels;
 using HomeworkValidator.Core.Content;
 using Microsoft.Data.SqlClient;
@@ -148,6 +149,111 @@ public class UserJourneyTests
         app.ScrollRight(column);
         app.Screenshot("scrolled-right");
         Assert.True(app.IsScrolledIntoView(column));
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "NeedsSqlServer")]
+    public async Task Student_watches_a_query_run()
+    {
+        var app = AppDriver.Launch(new MainViewModel(Content, appDataFolder: TestAppBuilder.NewTempFolder()), "visualizer");
+        await ConnectAsync(app);
+
+        app.Click(app.TreeItem("3. Products priced between 500"));
+        app.WriteAnswer(RightAnswer);
+        app.Click(app.Button("Visualize"));
+        var visualizer = await app.WaitForVisualizerAsync();
+        Assert.True(app.VisualizerShows("Products → WHERE → ORDER BY"));
+        Assert.True(app.VisualizerShows("Start scan"));
+        app.VisualizerScreenshot(visualizer, "start");
+
+        // Step by step: the first row is tested against each condition.
+        var next = app.VisualizerButton("Next");
+        app.Click(next);
+        Assert.True(app.VisualizerShows("WHERE: test row 1 of 10"));
+        app.Click(next);
+        Assert.True(app.VisualizerShows("Check: ListPrice > 500"));
+        app.VisualizerScreenshot(visualizer, "first-condition");
+
+        // The arrow keys step too.
+        app.PressIn(visualizer, PhysicalKey.ArrowLeft);
+        Assert.True(app.VisualizerShows("WHERE: test row 1 of 10"));
+
+        var animation = (VisualizerViewModel)visualizer.DataContext!;
+        animation.Step = animation.Scene.Frames.Count / 2;
+        Dispatcher.UIThread.RunJobs();
+        app.VisualizerScreenshot(visualizer, "halfway");
+        animation.Step = animation.Scene.Frames.Count - 1;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(app.VisualizerShows("Sorted"));
+        Assert.False(next.IsEffectivelyEnabled);
+        app.VisualizerScreenshot(visualizer, "sorted");
+
+        // A join, in the same window.
+        app.WriteAnswer("SELECT c.CategoryName, p.ProductName, p.ListPrice\nFROM Categories c\nLEFT JOIN Products p ON c.CategoryID = p.CategoryID\nWHERE c.CategoryName <> 'Drums'\nORDER BY p.ListPrice DESC;");
+        app.Click(app.Button("Visualize"));
+        await app.WaitUntil(() => app.VisualizerShows("Categories LEFT JOIN Products → WHERE → ORDER BY"), "the join's animation");
+        Assert.Same(visualizer, app.Visualizer);
+        app.VisualizerScreenshot(visualizer, "join-start");
+
+        var join = (VisualizerViewModel)visualizer.DataContext!;
+        join.Step = 9;
+        Dispatcher.UIThread.RunJobs();
+        app.VisualizerScreenshot(visualizer, "join-forming");
+
+        app.Click(app.VisualizerCheckBox("In-depth"));
+        Assert.True(app.VisualizerShows("Ready: test each Categories row against every Products row (4 × 10 comparisons)"));
+        app.Click(app.VisualizerButton("Next"));
+        Assert.True(app.VisualizerShows("Compare Categories row 1 with each Products row: ON is true for 6, false for 4"));
+        app.VisualizerScreenshot(visualizer, "join-in-depth");
+
+        // Esc closes it.
+        app.PressIn(visualizer, PhysicalKey.Escape);
+        Assert.Null(app.Visualizer);
+
+        // Queries it can't show say why, next to the button.
+        app.WriteAnswer("SELECT CategoryID, COUNT(*) FROM Products GROUP BY CategoryID;");
+        app.Click(app.Button("Visualize"));
+        await app.WaitUntil(() => app.ShowsSelectableTextStartingWith("The visualizer can't show GROUP BY yet."), "the message about GROUP BY");
+        Assert.Null(app.Visualizer);
+        app.Screenshot("cant-show");
+
+        // So do mistakes, and a query that works clears the message.
+        app.WriteAnswer("SELECT Nope FROM Products;");
+        app.Click(app.Button("Visualize"));
+        await app.WaitUntil(() => app.ShowsSelectableTextStartingWith("Line 1: Invalid column name 'Nope'."), "the SQL error");
+        app.WriteAnswer(RightAnswer);
+        app.Click(app.Button("Visualize"));
+        await app.WaitForVisualizerAsync();
+        Assert.False(app.ShowsSelectableTextStartingWith("Line 1:"));
+
+        // Scripts don't return rows to watch.
+        app.Click(app.TreeItem("6. Delete category 4"));
+        Assert.False(app.VisibleButton("Visualize"));
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "NeedsSqlServer")]
+    public async Task Long_tables_keep_the_current_row_in_view()
+    {
+        var app = AppDriver.Launch(new MainViewModel(Content, appDataFolder: TestAppBuilder.NewTempFolder()), "visualizer-long");
+        await ConnectAsync(app);
+
+        app.Click(app.TreeItem("1. Vendors joined with their invoices"));
+        app.WriteAnswer("SELECT v.VendorName, i.InvoiceNumber, i.InvoiceTotal\nFROM Vendors v\nJOIN Invoices i ON v.VendorID = i.VendorID\nWHERE i.InvoiceTotal > 500\nORDER BY v.VendorName;");
+        app.Click(app.Button("Visualize"));
+        var visualizer = await app.WaitForVisualizerAsync();
+        app.VisualizerScreenshot(visualizer, "start");
+
+        var animation = (VisualizerViewModel)visualizer.DataContext!;
+        animation.Step = animation.Scene.Frames.Count / 3;
+        Dispatcher.UIThread.RunJobs();
+        app.VisualizerScreenshot(visualizer, "a-third-in");
+        animation.Step = animation.Scene.Frames.Count * 3 / 4;
+        Dispatcher.UIThread.RunJobs();
+        app.VisualizerScreenshot(visualizer, "three-quarters-in");
+
+        app.Click(app.VisualizerButton("Fit"));
+        app.VisualizerScreenshot(visualizer, "fit");
     }
 
     [AvaloniaFact]
