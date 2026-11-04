@@ -234,6 +234,35 @@ public class UserJourneyTests
 
     [AvaloniaFact]
     [Trait("Category", "NeedsSqlServer")]
+    public async Task Student_watches_rows_go_into_groups()
+    {
+        var app = AppDriver.Launch(new MainViewModel(Content, appDataFolder: TestAppBuilder.NewTempFolder()), "visualizer-groups");
+        await ConnectAsync(app);
+
+        app.Click(app.TreeItem("2. Product count and top price"));
+        app.WriteAnswer("SELECT CategoryName, COUNT(*) AS ProductCount, MAX(ListPrice) AS MostExpensive\nFROM Categories c\nJOIN Products p ON c.CategoryID = p.CategoryID\nGROUP BY CategoryName\nHAVING COUNT(*) > 2\nORDER BY ProductCount DESC;");
+        app.Click(app.Button("Visualize"));
+        var visualizer = await app.WaitForVisualizerAsync();
+        Assert.True(app.VisualizerShows("Categories ⋈ Products → GROUP BY → HAVING → ORDER BY"));
+
+        var animation = (VisualizerViewModel)visualizer.DataContext!;
+        var frames = animation.Scene.Frames.ToList();
+        void GoTo(string phaseStart, string screenshot)
+        {
+            animation.Step = frames.FindIndex(f => f.Phase.StartsWith(phaseStart, StringComparison.Ordinal));
+            Assert.True(animation.Step >= 0, phaseStart);
+            Dispatcher.UIThread.RunJobs();
+            app.VisualizerScreenshot(visualizer, screenshot);
+        }
+
+        GoTo("Row 5 of 10 goes into the group", "into-groups");
+        GoTo("Guitars: 6 rows become one row: ProductCount = 6, MostExpensive = 2517", "summarize");
+        GoTo("HAVING: test row 2", "having");
+        GoTo("Sorted", "sorted");
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "NeedsSqlServer")]
     public async Task Student_watches_two_queries_combine()
     {
         var app = AppDriver.Launch(new MainViewModel(Content, appDataFolder: TestAppBuilder.NewTempFolder()), "visualizer-union");
@@ -277,35 +306,6 @@ public class UserJourneyTests
         Dispatcher.UIThread.RunJobs();
         Assert.StartsWith("✗ Query 1 row 1 of 4 is also in Query 2", except.Phase);
         app.VisualizerScreenshot(visualizer, "except");
-    }
-
-    [AvaloniaFact]
-    [Trait("Category", "NeedsSqlServer")]
-    public async Task Student_watches_rows_go_into_groups()
-    {
-        var app = AppDriver.Launch(new MainViewModel(Content, appDataFolder: TestAppBuilder.NewTempFolder()), "visualizer-groups");
-        await ConnectAsync(app);
-
-        app.Click(app.TreeItem("2. Product count and top price"));
-        app.WriteAnswer("SELECT CategoryName, COUNT(*) AS ProductCount, MAX(ListPrice) AS MostExpensive\nFROM Categories c\nJOIN Products p ON c.CategoryID = p.CategoryID\nGROUP BY CategoryName\nHAVING COUNT(*) > 2\nORDER BY ProductCount DESC;");
-        app.Click(app.Button("Visualize"));
-        var visualizer = await app.WaitForVisualizerAsync();
-        Assert.True(app.VisualizerShows("Categories ⋈ Products → GROUP BY → HAVING → ORDER BY"));
-
-        var animation = (VisualizerViewModel)visualizer.DataContext!;
-        var frames = animation.Scene.Frames.ToList();
-        void GoTo(string phaseStart, string screenshot)
-        {
-            animation.Step = frames.FindIndex(f => f.Phase.StartsWith(phaseStart, StringComparison.Ordinal));
-            Assert.True(animation.Step >= 0, phaseStart);
-            Dispatcher.UIThread.RunJobs();
-            app.VisualizerScreenshot(visualizer, screenshot);
-        }
-
-        GoTo("Row 5 of 10 goes into the group", "into-groups");
-        GoTo("Guitars: 6 rows become one row: ProductCount = 6, MostExpensive = 2517", "summarize");
-        GoTo("HAVING: test row 2", "having");
-        GoTo("Sorted", "sorted");
     }
 
     [AvaloniaFact]
