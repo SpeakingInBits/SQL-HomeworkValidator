@@ -264,6 +264,16 @@ public class VisualizerServerTests
     }
 
     [Fact]
+    public async Task A_query_with_no_FROM_clause_gets_its_values_from_the_server()
+    {
+        var trace = await TraceAsync("SELECT 100 AS Price, 100 * .07 AS TaxAmount, UPPER('abc') AS Letters, NULL AS Nothing, 1 + 1");
+
+        Assert.Equal(["Price", "TaxAmount", "Letters", "Nothing", "(no name)"], trace.Columns);
+        Assert.Equal(["100", "7", "ABC", "NULL", "2"], Assert.Single(trace.Rows));
+        Assert.Equal(["100", "100 * .07", "UPPER('abc')", "NULL", "1 + 1"], trace.Expressions);
+    }
+
+    [Fact]
     public async Task It_runs_as_the_read_only_user()
     {
         var trace = await TraceAsync("SELECT CURRENT_USER AS Who, TermsID FROM Terms");

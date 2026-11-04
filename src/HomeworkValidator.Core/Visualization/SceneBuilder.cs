@@ -55,7 +55,8 @@ public sealed class SceneBuilder
     private int SourceCount => _trace.Sources.Count;
     private int RowCount => _trace.Rows.Count;
 
-    public static VizScene Build(QueryTrace trace) => new SceneBuilder(trace).Build();
+    public static VizScene Build(QueryTrace trace) =>
+        trace.Expressions is not null ? ExpressionSceneBuilder.Build(trace) : new SceneBuilder(trace).Build();
 
     private VizScene Build()
     {

@@ -31,6 +31,10 @@ public sealed class QueryTracer(ServerConnection server)
         // Their own query first, so a mistake in it is reported in their words, with its line number.
         var actual = await _queries.RunAsync(database, shape.Query, restricted: true, ct);
 
+        // With no tables there are no rows to follow, and the query's own result is the whole story.
+        if (shape.Expressions is { } expressions)
+            return new TraceOutcome(ExpressionTrace(actual, expressions), []);
+
         var orderings = new List<string>();
         foreach (var source in shape.Sources)
             orderings.Add(await RowOrderingAsync(database, source, ct));
@@ -47,6 +51,12 @@ public sealed class QueryTracer(ServerConnection server)
             // It can fail where the real query doesn't, as these queries also work on rows WHERE would have removed.
             throw new QueryFailedException($"The visualizer couldn't follow this query. {ex.Message}");
         }
+    }
+
+    private static QueryTrace ExpressionTrace(ResultTable actual, IReadOnlyList<string> expressions)
+    {
+        var columns = actual.Columns.Select(Header).ToList();
+        return new QueryTrace("", [], [], columns, columns.Count, ResultComparer.Rows(actual, 1).Rows, [[]], null, null, []) { Expressions = expressions };
     }
 
     /// <summary>

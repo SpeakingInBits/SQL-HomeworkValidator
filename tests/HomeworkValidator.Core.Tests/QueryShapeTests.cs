@@ -20,13 +20,31 @@ public class QueryShapeTests
     [InlineData("SELECT * FROM Terms t JOIN (SELECT * FROM Vendors) v ON t.TermsID = v.DefaultTermsID", "a subquery in the FROM clause")]
     [InlineData("SELECT * FROM Vendors v CROSS APPLY (SELECT 1 AS One) x", "CROSS APPLY")]
     [InlineData("SELECT * FROM Vendors ORDER BY VendorID OFFSET 5 ROWS", "OFFSET")]
-    [InlineData("SELECT 1 + 1", "a query without a FROM clause")]
+    [InlineData("SELECT 1 AS One WHERE 1 = 1", "no FROM clause")]
+    [InlineData("SELECT TOP 0 1 AS One", "no FROM clause")]
+    [InlineData("SELECT COUNT(*) AS Rows", "no FROM clause")]
+    [InlineData("DECLARE @One int; SELECT @One = 1", "isn't allowed here")]
     [InlineData("SELECT * FROM Terms t JOIN Vendors v ON t.TermsID = v.DefaultTermsID ORDER BY 5", "a column number")]
     public void Says_which_feature_it_cant_show(string sql, string feature)
     {
         var problem = Assert.Single(QueryShape.Analyze(sql).Problems);
 
         Assert.Contains(feature, problem);
+    }
+
+    [Fact]
+    public void A_query_with_no_FROM_clause_is_a_list_of_expressions()
+    {
+        var shape = Shape("SELECT 100 AS Price, .07 AS TaxRate, 100 * .07 AS TaxAmount");
+
+        Assert.Equal(["100", ".07", "100 * .07"], shape.Expressions);
+        Assert.Empty(shape.Sources);
+    }
+
+    [Fact]
+    public void Other_queries_have_no_list_of_expressions()
+    {
+        Assert.Null(Shape("SELECT 100 AS Price FROM Vendors").Expressions);
     }
 
     [Fact]
