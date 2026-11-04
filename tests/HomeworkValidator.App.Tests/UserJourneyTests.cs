@@ -212,9 +212,9 @@ public class UserJourneyTests
         Assert.Null(app.Visualizer);
 
         // Queries it can't show say why, next to the button.
-        app.WriteAnswer("SELECT ProductName FROM Products UNION SELECT CategoryName FROM Categories;");
+        app.WriteAnswer("WITH p AS (SELECT * FROM Products) SELECT * FROM p;");
         app.Click(app.Button("Visualize"));
-        await app.WaitUntil(() => app.ShowsSelectableTextStartingWith("The visualizer can't show UNION"), "the message about UNION");
+        await app.WaitUntil(() => app.ShowsSelectableTextStartingWith("The visualizer can't show common table expressions"), "the message about WITH");
         Assert.Null(app.Visualizer);
         app.Screenshot("cant-show");
 
@@ -286,6 +286,53 @@ public class UserJourneyTests
         GoTo("Guitars: 6 rows become one row: ProductCount = 6, MostExpensive = 2517", "summarize");
         GoTo("HAVING: test row 2", "having");
         GoTo("Sorted", "sorted");
+    }
+
+    [AvaloniaFact]
+    [Trait("Category", "NeedsSqlServer")]
+    public async Task Student_watches_two_queries_combine()
+    {
+        var app = AppDriver.Launch(new MainViewModel(Content, appDataFolder: TestAppBuilder.NewTempFolder()), "visualizer-union");
+        await ConnectAsync(app);
+
+        app.Click(app.TreeItem("7. Shipped and unshipped orders"));
+        app.WriteAnswer("SELECT 'SHIPPED' AS ShipStatus, OrderID, OrderDate\nFROM Orders\nWHERE ShipDate IS NOT NULL\nUNION\nSELECT 'NOT SHIPPED', OrderID, OrderDate\nFROM Orders\nWHERE ShipDate IS NULL\nORDER BY OrderDate;");
+        app.Click(app.Button("Visualize"));
+        var visualizer = await app.WaitForVisualizerAsync();
+
+        // Each query plays on its own first.
+        var animation = (VisualizerViewModel)visualizer.DataContext!;
+        Assert.Equal(["Query 1: Orders → WHERE", "Query 2: Orders → WHERE", "Combine: UNION → ORDER BY"], animation.Scenes.Select(s => s.Title));
+        Assert.True(app.VisualizerShows("Query 1: Orders → WHERE"));
+        Assert.True(app.VisualizerShows("This runs each query on its own, then combines their rows. Choose a step from the list at the top."));
+        app.VisualizerScreenshot(visualizer, "first-query");
+
+        // Then the rows come together.
+        animation.Scene = animation.Scenes[^1];
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(app.VisualizerShows("Combine: UNION → ORDER BY"));
+        Assert.Equal(0, animation.Step);
+        app.Click(app.VisualizerButton("Next"));
+        app.Click(app.VisualizerButton("Next"));
+        app.VisualizerScreenshot(visualizer, "combining");
+
+        animation.Step = animation.Scene.Frames.Count - 1;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(app.VisualizerShows("Sorted"));
+        app.VisualizerScreenshot(visualizer, "sorted");
+
+        // EXCEPT looks rows up instead of bringing them across.
+        app.WriteAnswer("SELECT CategoryID FROM Categories\nEXCEPT\nSELECT CategoryID FROM Products;");
+        app.Click(app.Button("Visualize"));
+        await app.WaitUntil(() => app.VisualizerShows("Query 1: Categories"), "the EXCEPT's animation");
+        var except = (VisualizerViewModel)visualizer.DataContext!;
+        except.Scene = except.Scenes[^1];
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(app.VisualizerShows("Combine: EXCEPT"));
+        except.Step = 1;
+        Dispatcher.UIThread.RunJobs();
+        Assert.StartsWith("✗ Query 1 row 1 of 4 is also in Query 2", except.Phase);
+        app.VisualizerScreenshot(visualizer, "except");
     }
 
     [AvaloniaFact]
